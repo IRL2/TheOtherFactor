@@ -1,0 +1,75 @@
+# Unity-specific ignores
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+ExportedObj/
+.consulo/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+
+# Ignore specific Oculus files
+Assets/AssetStoreTools*
+Assets/Plugins/Editor/JetBrains*
+Assets/Resources/OvrAvatarSettings.asset
+Assets/Resources/OculusPlatformSettings.asset
+Assets/Resources/OculusPlatformSettings.asset.meta
+[Aa]ssets/[Oo]culus
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Crashlytics
+crashlytics-build.properties
+
+# Packed Addressables
+/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+# StreamingAssets
+/[Aa]ssets/[Ss]treamingAssets/aa.meta
+/[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# Visual Studio / Rider / IDE specific ignores
+.vs/
+.idea/
+*.VC.db
+
+# Gradle cache
+.gradle/
+
+# macOS specific ignores
+.DS_Store
+**/.DS_Store
+
+# Thumbnails
+Thumbs.db
+Thumbs.db:encryptable
+
+# Others
+*.log
+*.swp
+*.lock
