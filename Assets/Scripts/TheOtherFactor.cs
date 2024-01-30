@@ -22,7 +22,7 @@ public class TheOtherFactor : MonoBehaviour
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public int ParticlesPerHand = 35000;
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
-    public float ParticleSize = .005f;
+    public Vector2 ParticleSizeMinMax = new Vector2(.003f, .008f);
     public Material ParticleMaterial;
     private ParticleSystem particleSystem;
     private ParticleSystemRenderer particleRenderer;
@@ -755,7 +755,7 @@ public class TheOtherFactor : MonoBehaviour
         int totalParticles = ParticlesPerHand * 2;
         ParticleSystem.EmitParams emitParams = new ParticleSystem.EmitParams
         {
-            startSize = ParticleSize,
+            startSize = ParticleSizeMinMax.x,
             startLifetime = 3600f, // 1 hour
         };
 
@@ -819,6 +819,9 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Color
             paJob_ColorLerp = ColorLerp,
+            #endregion
+            #region Size
+            paJob_ParticleSizeMinMax = ParticleSizeMinMax,
             #endregion
         };
         positionJobL = new ComputeWorldPositionJob
@@ -953,6 +956,9 @@ public class TheOtherFactor : MonoBehaviour
         #region Color
         particleAttractionJob.paJob_ColorLerp = ColorLerp;
         #endregion
+        #region Size
+        particleAttractionJob.paJob_ParticleSizeMinMax = ParticleSizeMinMax;
+        #endregion
     }
     private void UpdateParticlesAttractionLR()
     {
@@ -1011,6 +1017,9 @@ public class TheOtherFactor : MonoBehaviour
         #region Color
         [ReadOnly] public float paJob_ColorLerp;
         #endregion
+        #region Size
+        [ReadOnly] public Vector2 paJob_ParticleSizeMinMax;
+        #endregion
         #endregion
         public void Execute(ParticleSystemJobData particles, int startIndex, int count)
         {
@@ -1018,33 +1027,35 @@ public class TheOtherFactor : MonoBehaviour
             var positions = particles.positions;
             var velocities = particles.velocities;
             var colors = particles.startColors;
+            var sizes = particles.sizes.x;
             int endIndex = startIndex + count;
+            float gaussianAttractionFactor = 1 / (math.pow(2 * math.PI, .5f) * (paJob_Gauss + 0.0000001f));
+            float gaussianExponentAttraction = 2 * paJob_Gauss * paJob_Gauss;
             #endregion
 
             for (int i = startIndex; i < endIndex; i++)
             {
                 int particleIndex = i;
-                Vector3 previousVelocity = paJob_PreviousVelocities[particleIndex];
                 Vector3 particlePosition = positions[particleIndex];
 
                 #region Compute Attraction to Left Hand
                 int pseudoMeshPosIndexL = paJob_PseudoMeshIndicesL[particleIndex];
                 Vector3 worldPositionL = paJob_WorldPositionsL[pseudoMeshPosIndexL];
                 paJob_PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + paJob_IndexStepSizes[(particleIndex + paJob_IndexStepsSizeIndex) % paJob_WorldPositionsL.Length]) % paJob_WorldPositionsL.Length;
-                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, previousVelocity, paJob_Gauss, 0.000001f);
+                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, gaussianExponentAttraction, gaussianAttractionFactor);
                 velocityL *= paJob_PartilesAttractionLR[particleIndex].x;
                 #endregion
                 #region Compute Attraction to Right Hand
                 int pseudoMeshPosIndexR = paJob_PseudoMeshIndicesR[particleIndex];
                 Vector3 worldPositionR = paJob_WorldPositionsR[pseudoMeshPosIndexR];
                 paJob_PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + paJob_IndexStepSizes[(particleIndex + paJob_IndexStepsSizeIndex) % paJob_WorldPositionsR.Length]) % paJob_WorldPositionsR.Length;
-                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, previousVelocity, paJob_Gauss, 0.000001f);
+                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, gaussianExponentAttraction, gaussianAttractionFactor);
                 velocityR *= paJob_PartilesAttractionLR[particleIndex].y;
                 #endregion
 
                 #region Update Particle Velocity, Position and Color
                 #region Veloctiy
-                Vector3 velocity = (velocityL + velocityR) / 2;
+                Vector3 velocity = velocityL + velocityR;
                 velocity = math.lerp(velocities[particleIndex], velocity, .1f);
                 paJob_PreviousVelocities[particleIndex] = velocity;
                 velocities[particleIndex] = velocity;
@@ -1058,6 +1069,22 @@ public class TheOtherFactor : MonoBehaviour
                 colors[particleIndex] = Color.Lerp(colors[particleIndex], color, paJob_ColorLerp);
                 // For Debugging, it can make sense to color the two groups of particles in distinct colors
                 //colors[particleIndex] = particleIndex < particles.count / 2 ? Color.green : Color.red;
+                #endregion
+                #region Distance
+                float distanceL = math.length(worldPositionL - particlePosition);
+                float distanceR = math.length(worldPositionR - particlePosition);
+                float leastDistance = math.min(distanceL, distanceR); // Use math.min for minimum
+
+                // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
+                float normalizedDistance = math.clamp(leastDistance / paJob_ParticleSizeMinMax.y, 0f, 1f);
+
+                // Inverse the normalized distance since we want max size at distance 0
+                float inverseNormalizedDistance = 1 - normalizedDistance;
+
+                float targetSize = math.lerp(paJob_ParticleSizeMinMax.x, paJob_ParticleSizeMinMax.y, inverseNormalizedDistance);
+
+                // Update the particle size, potentially blending with its current size
+                sizes[i] = math.lerp(sizes[i], targetSize, 0.025f);
                 #endregion
                 #endregion
             }
@@ -1074,31 +1101,28 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Calculate Attraction Velocity
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector3 CalculateAttractionVelocity(Vector3 worldPosition, Vector3 particlePosition, Vector3 currentVelocity, float attractionStrength, float epsilon)
+        private static Vector3 CalculateAttractionVelocity(Vector3 worldPosition, Vector3 particlePosition, float exponentAttraction, float gaussianAttractionFactor)
         {
             // Calculate the direction and distance from the particle to the world position
             Vector3 direction = worldPosition - particlePosition;
 
-            // Adjust the attraction strength by adding a small epsilon to avoid division by zero
-            float adjustedAttractionStrength = attractionStrength + epsilon;
+            // Calculate the exponent for the Gaussian distribution based on the distance and attraction strength
+            float exponent = -math.lengthsq(direction) / exponentAttraction;
+
+            // Apply the Gaussian distribution to calculate the attraction force
+            float attraction = gaussianAttractionFactor * math.exp(exponent);
+
+            float distance = math.length(direction);
+            attraction *= 1 - distance;
 
             // Normalize the direction vector
             Vector3 normDirection = math.normalize(direction);
-
-            // Calculate the exponent for the Gaussian distribution based on the distance and attraction strength
-            float exponent = -(math.lengthsq(direction)) / (2 * adjustedAttractionStrength * adjustedAttractionStrength);
-
-            // Apply the Gaussian distribution to calculate the attraction force
-            float attraction = (1 / (math.pow(2 * math.PI, 1.5f) * adjustedAttractionStrength)) * math.exp(exponent);
-
             // Apply a minimum attraction force to ensure particles do not come to a complete stop
             float minAttraction = .01f; // Consider exposing this to the inspector ---------------
-            float distance = math.length(direction);
-            attraction *= 1 - (distance * distance);
-            normDirection = attraction < minAttraction ? normDirection * minAttraction : normDirection * attraction;
+            normDirection = normDirection * math.max(minAttraction, attraction);
 
             // Calculate and return the new velocityL of the particle
-            return currentVelocity + normDirection;
+            return normDirection;
         }
         #endregion
         #region Compute Particle Color
