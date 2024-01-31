@@ -950,15 +950,14 @@ public class TheOtherFactor : MonoBehaviour
     private void UpdateAttractionJob()
     {
         #region Gaussian Attraction
-        particleAttractionJob.paJob_GaussianAttraction = GaussianAttraction;
-        particleAttractionJob.paJob_GaussianAttractionExponent = 1 / (math.pow(2 * math.PI, .5f) * (GaussianAttraction + 0.0000001f));
-        //particleAttractionJob.paJob_GaussDeltaTime = GaussDeltaTime;
+        particleAttractionJob.paJob_GaussianAttraction = 1 / (math.pow(2 * math.PI, .5f) * (GaussianAttraction + 0.0000001f)); 
+        particleAttractionJob.paJob_GaussianAttractionExponent = 2 * GaussianAttraction * GaussianAttraction; 
         #endregion
         #region Velocity
         particleAttractionJob.paJob_MinVelocity = MinVelocity;
         particleAttractionJob.paJob_VelocityLerp = VelocityLerp;
         #endregion
-        #region Particles Attraction Modifier
+        #region Attraction Scaling Per Group/Hand
         UpdateParticlesAttractionLR();
         particleAttractionJob.paJob_PartilesAttractionLR = paJob_ParticlesAttractionLR;
         #endregion

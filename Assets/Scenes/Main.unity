@@ -11609,7 +11609,7 @@ MonoBehaviour:
   DistanceForMinSize: 0.001
   SizeLerp: 0.05
   ParticleMaterial: {fileID: 2100000, guid: b737c9e8b476bc64e82fad8705ad71e3, type: 2}
-  GaussianAttraction: 0.2
+  GaussianAttraction: 1
   MinVelocity: 0.5
   VelocityLerp: 0.1
   ParticlesAttractionGroup1: {x: 1, y: 1}
