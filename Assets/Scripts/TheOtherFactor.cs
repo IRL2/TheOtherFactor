@@ -21,17 +21,27 @@ public class TheOtherFactor : MonoBehaviour
     [Header("Particles")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public int ParticlesPerHand = 35000;
-    [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
+    [Tooltip("The min and max values for aprticle size, max reached at 0 distance from joint, min reached at DistanceForMinSize.")]
     public Vector2 ParticleSizeMinMax = new Vector2(.003f, .008f);
+    [Tooltip("The distance between particle and joint at which the particle size reaches ParticleSizeMinMax.x")]
+    public float DistanceForMinSize = .008f;
+    [Tooltip("The linear interpolation factor for size change in one update.")]
+    public float SizeLerp = .05f;
+    [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Material ParticleMaterial;
     private ParticleSystem particleSystem;
     private ParticleSystemRenderer particleRenderer;
     #endregion
-    #region Gauss
+    #region Gaussian Attraction
     [Header("Gaussian Attraction")]
-    public float GaussianAttraction = .2f;
-    [Tooltip("The amount of simulated time between attraction update steps.")]
-    public float GaussDeltaTime = 1e-05f;
+    public float GaussianAttraction = 1f;
+    #endregion
+    #region Velocity
+    [Header("Velocity")]
+    [Tooltip("The minimum velocity. We applythe maximum between the computed velocity that depends on distance and the velocity.normalized * MinVelocity.")]
+    public float MinVelocity = .5f;
+    [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
+    public float VelocityLerp = .1f;
     #endregion
     #region Attraction Scaling Per Group/Hand
     [Header("Attraction Scaling Per Group/Hand")]
@@ -39,6 +49,11 @@ public class TheOtherFactor : MonoBehaviour
     public Vector2 ParticlesAttractionGroup1 = Vector2.one;
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
     public Vector2 ParticlesAttractionGroup2 = Vector2.one;
+    #endregion
+    #region Per Particle Scaling
+    [Header("Per Particle Scaling")]
+    public Vector2 PerParticleScalingMinMax = new Vector2(0f,1f);
+    public float PerParticleScalingPowerFactor = .1f;
     #endregion
     #region Position Offsets
     // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
@@ -53,7 +68,8 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Color
     [Header("Color")]
-    private float ColorLerp = .05f;
+    [Tooltip("The linear interpolation factor for color change in one opdate step.")]
+    public float ColorLerp = .05f;
     #endregion
     #region Autostart
     [Header("Start")]
@@ -264,9 +280,13 @@ public class TheOtherFactor : MonoBehaviour
         await Task.Yield();
         #endregion
 
-        #region Start Runtime Functions
-        StartCoroutine(StartRuntimeFunctions());
+        #region Initialize Jobs
+        InitializeRuntimeJobs();
         await Task.Yield();
+        #endregion
+
+        #region Activate Runtime Functions
+        RunJobs = true;
         #endregion
 
         #region Enable Hand Tracking (and Visuals if DisplayOculusHands = true)
@@ -671,9 +691,8 @@ public class TheOtherFactor : MonoBehaviour
         paJob_PerParticleScaling = new float[totalParticles];
         for (int i = 0; i < totalParticles; i++)
         {
-            float linearRandom = UnityEngine.Random.Range(0f, .8f);
-            float powerFactor = .1f; // Change this value to control the spread. Higher values will concentrate more values near 0.
-            paJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, powerFactor);
+            float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
+            paJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
         }
         #endregion
         #region Pseudo Mesh
@@ -777,27 +796,25 @@ public class TheOtherFactor : MonoBehaviour
             // Emit particles around the right middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                emitParams.position = rightMiddle1Joint.position;// + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                emitParams.position = rightMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSystem.Emit(emitParams, 1);
             }
         }
     }
     #endregion
-    #region Start Runtime Functions
-    public IEnumerator StartRuntimeFunctions()
-    {
-        InitializeRuntimeJobs();
-        yield return null;
-        RunJobs = true;
-    }
+    #region Initialize Jobs
     private void InitializeRuntimeJobs()
     {
         particleAttractionJob = new ParticleAttractionJob
         {
-            #region Gauss
-            paJob_Gauss = GaussianAttraction,
-            paJob_GaussDeltaTime = GaussDeltaTime,
+            #region Gaussian Attraction
+            paJob_GaussianAttraction = 1 / (math.pow(2 * math.PI, .5f) * (GaussianAttraction + 0.0000001f)),
+            paJob_GaussianAttractionExponent = 2 * GaussianAttraction * GaussianAttraction,
             #endregion
+            #region Velocity
+            paJob_MinVelocity = MinVelocity,
+                    paJob_VelocityLerp = VelocityLerp,
+                    #endregion
             #region Attraction Scaling Per Group/Hand
             paJob_PartilesAttractionLR = paJob_ParticlesAttractionLR,
             #endregion
@@ -822,6 +839,8 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Size
             paJob_ParticleSizeMinMax = ParticleSizeMinMax,
+            paJob_DistanceForMinSize = DistanceForMinSize,
+            paJob_SizeLerp = SizeLerp,
             #endregion
         };
         positionJobL = new ComputeWorldPositionJob
@@ -930,9 +949,14 @@ public class TheOtherFactor : MonoBehaviour
     }
     private void UpdateAttractionJob()
     {
-        #region Gauss
-        particleAttractionJob.paJob_Gauss = GaussianAttraction;
-        particleAttractionJob.paJob_GaussDeltaTime = GaussDeltaTime;
+        #region Gaussian Attraction
+        particleAttractionJob.paJob_GaussianAttraction = GaussianAttraction;
+        particleAttractionJob.paJob_GaussianAttractionExponent = 1 / (math.pow(2 * math.PI, .5f) * (GaussianAttraction + 0.0000001f));
+        //particleAttractionJob.paJob_GaussDeltaTime = GaussDeltaTime;
+        #endregion
+        #region Velocity
+        particleAttractionJob.paJob_MinVelocity = MinVelocity;
+        particleAttractionJob.paJob_VelocityLerp = VelocityLerp;
         #endregion
         #region Particles Attraction Modifier
         UpdateParticlesAttractionLR();
@@ -958,6 +982,8 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Size
         particleAttractionJob.paJob_ParticleSizeMinMax = ParticleSizeMinMax;
+        particleAttractionJob.paJob_DistanceForMinSize = DistanceForMinSize;
+        particleAttractionJob.paJob_SizeLerp = SizeLerp;
         #endregion
     }
     private void UpdateParticlesAttractionLR()
@@ -991,9 +1017,13 @@ public class TheOtherFactor : MonoBehaviour
     struct ParticleAttractionJob : IJobParticleSystemParallelForBatch
     {
         #region Job Variables
-        #region Gauss
-        [ReadOnly] public float paJob_Gauss;
-        [ReadOnly] public float paJob_GaussDeltaTime;
+        #region Gaussian Attraction
+        [ReadOnly] public float paJob_GaussianAttraction;
+        [ReadOnly] public float paJob_GaussianAttractionExponent;
+        #endregion
+        #region Veloctiy
+        [ReadOnly] public float paJob_MinVelocity;
+        [ReadOnly] public float paJob_VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
         [ReadOnly] public NativeArray<Vector2> paJob_PartilesAttractionLR;
@@ -1019,6 +1049,8 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Size
         [ReadOnly] public Vector2 paJob_ParticleSizeMinMax;
+        [ReadOnly] public float paJob_DistanceForMinSize;
+        [ReadOnly] public float paJob_SizeLerp;
         #endregion
         #endregion
         public void Execute(ParticleSystemJobData particles, int startIndex, int count)
@@ -1029,8 +1061,6 @@ public class TheOtherFactor : MonoBehaviour
             var colors = particles.startColors;
             var sizes = particles.sizes.x;
             int endIndex = startIndex + count;
-            float gaussianAttractionFactor = 1 / (math.pow(2 * math.PI, .5f) * (paJob_Gauss + 0.0000001f));
-            float gaussianExponentAttraction = 2 * paJob_Gauss * paJob_Gauss;
             #endregion
 
             for (int i = startIndex; i < endIndex; i++)
@@ -1042,26 +1072,24 @@ public class TheOtherFactor : MonoBehaviour
                 int pseudoMeshPosIndexL = paJob_PseudoMeshIndicesL[particleIndex];
                 Vector3 worldPositionL = paJob_WorldPositionsL[pseudoMeshPosIndexL];
                 paJob_PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + paJob_IndexStepSizes[(particleIndex + paJob_IndexStepsSizeIndex) % paJob_WorldPositionsL.Length]) % paJob_WorldPositionsL.Length;
-                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, gaussianExponentAttraction, gaussianAttractionFactor);
+                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, paJob_GaussianAttractionExponent, paJob_GaussianAttraction);
                 velocityL *= paJob_PartilesAttractionLR[particleIndex].x;
                 #endregion
                 #region Compute Attraction to Right Hand
                 int pseudoMeshPosIndexR = paJob_PseudoMeshIndicesR[particleIndex];
                 Vector3 worldPositionR = paJob_WorldPositionsR[pseudoMeshPosIndexR];
                 paJob_PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + paJob_IndexStepSizes[(particleIndex + paJob_IndexStepsSizeIndex) % paJob_WorldPositionsR.Length]) % paJob_WorldPositionsR.Length;
-                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, gaussianExponentAttraction, gaussianAttractionFactor);
+                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, paJob_GaussianAttractionExponent, paJob_GaussianAttraction);
                 velocityR *= paJob_PartilesAttractionLR[particleIndex].y;
                 #endregion
 
                 #region Update Particle Velocity, Position and Color
                 #region Veloctiy
                 Vector3 velocity = velocityL + velocityR;
-                velocity = math.lerp(velocities[particleIndex], velocity, .1f);
+                velocity = math.max(velocity, velocity.normalized * paJob_MinVelocity);
+                velocity = math.lerp(velocities[particleIndex], velocity, paJob_VelocityLerp);
                 paJob_PreviousVelocities[particleIndex] = velocity;
                 velocities[particleIndex] = velocity;
-                #endregion
-                #region Position
-                positions[particleIndex] = UpdateParticlePosition(positions[particleIndex], velocity, paJob_PreviousVelocities[particleIndex], paJob_GaussDeltaTime, paJob_PreviousPositions, particleIndex);
                 #endregion
                 #region Color
                 // Compute particle color
@@ -1070,35 +1098,22 @@ public class TheOtherFactor : MonoBehaviour
                 // For Debugging, it can make sense to color the two groups of particles in distinct colors
                 //colors[particleIndex] = particleIndex < particles.count / 2 ? Color.green : Color.red;
                 #endregion
-                #region Distance
+                #region Size
                 float distanceL = math.length(worldPositionL - particlePosition);
                 float distanceR = math.length(worldPositionR - particlePosition);
-                float leastDistance = math.min(distanceL, distanceR); // Use math.min for minimum
+                float leastDistance = math.min(distanceL, distanceR); 
 
                 // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
-                float normalizedDistance = math.clamp(leastDistance / paJob_ParticleSizeMinMax.y, 0f, 1f);
-
-                // Inverse the normalized distance since we want max size at distance 0
+                float normalizedDistance = math.clamp(leastDistance / paJob_DistanceForMinSize, 0f, 1f);
                 float inverseNormalizedDistance = 1 - normalizedDistance;
-
                 float targetSize = math.lerp(paJob_ParticleSizeMinMax.x, paJob_ParticleSizeMinMax.y, inverseNormalizedDistance);
 
-                // Update the particle size, potentially blending with its current size
-                sizes[i] = math.lerp(sizes[i], targetSize, 0.025f);
+                sizes[i] = math.lerp(sizes[i], targetSize, paJob_SizeLerp);
                 #endregion
                 #endregion
             }
         }
         #region Functions
-        #region Update Position One Timestep
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector3 UpdateParticlePosition(Vector3 currentParticlePosition, Vector3 currentVelocity, Vector3 previousVelocity, float deltaTime, NativeArray<Vector3> previousPositions, int particleIndex)
-        {
-            Vector3 newPosition = currentParticlePosition + 0.5f * (previousVelocity + currentVelocity) * deltaTime;
-            previousPositions[particleIndex] = currentParticlePosition; 
-            return newPosition;
-        }
-        #endregion
         #region Calculate Attraction Velocity
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static Vector3 CalculateAttractionVelocity(Vector3 worldPosition, Vector3 particlePosition, float exponentAttraction, float gaussianAttractionFactor)
@@ -1107,7 +1122,7 @@ public class TheOtherFactor : MonoBehaviour
             Vector3 direction = worldPosition - particlePosition;
 
             // Calculate the exponent for the Gaussian distribution based on the distance and attraction strength
-            float exponent = -math.lengthsq(direction) / exponentAttraction;
+            float exponent = -math.lengthsq(direction) /  exponentAttraction;
 
             // Apply the Gaussian distribution to calculate the attraction force
             float attraction = gaussianAttractionFactor * math.exp(exponent);
@@ -1115,14 +1130,9 @@ public class TheOtherFactor : MonoBehaviour
             float distance = math.length(direction);
             attraction *= 1 - distance;
 
-            // Normalize the direction vector
             Vector3 normDirection = math.normalize(direction);
-            // Apply a minimum attraction force to ensure particles do not come to a complete stop
-            float minAttraction = .01f; // Consider exposing this to the inspector ---------------
-            normDirection = normDirection * math.max(minAttraction, attraction);
 
-            // Calculate and return the new velocityL of the particle
-            return normDirection;
+            return normDirection * attraction;
         }
         #endregion
         #region Compute Particle Color
