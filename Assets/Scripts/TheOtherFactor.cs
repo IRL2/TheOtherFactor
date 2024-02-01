@@ -38,8 +38,6 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Velocity
     [Header("Velocity")]
-    [Tooltip("The minimum velocity. We applythe maximum between the computed velocity that depends on distance and the velocity.normalized * MinVelocity.")]
-    public float MinVelocity = .5f;
     [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
     public float VelocityLerp = .1f;
     #endregion
@@ -808,13 +806,12 @@ public class TheOtherFactor : MonoBehaviour
         particleAttractionJob = new ParticleAttractionJob
         {
             #region Gaussian Attraction
-            paJob_GaussianAttraction = 1 / (math.pow(2 * math.PI, .5f) * (GaussianAttraction + 0.0000001f)),
+            paJob_GaussianAttraction = GaussianAttraction,
             paJob_GaussianAttractionExponent = 2 * GaussianAttraction * GaussianAttraction,
             #endregion
             #region Velocity
-            paJob_MinVelocity = MinVelocity,
-                    paJob_VelocityLerp = VelocityLerp,
-                    #endregion
+            paJob_VelocityLerp = VelocityLerp,
+            #endregion
             #region Attraction Scaling Per Group/Hand
             paJob_PartilesAttractionLR = paJob_ParticlesAttractionLR,
             #endregion
@@ -950,11 +947,10 @@ public class TheOtherFactor : MonoBehaviour
     private void UpdateAttractionJob()
     {
         #region Gaussian Attraction
-        particleAttractionJob.paJob_GaussianAttraction = 1 / (math.pow(2 * math.PI, .5f) * (GaussianAttraction + 0.0000001f)); 
+        particleAttractionJob.paJob_GaussianAttraction =  GaussianAttraction;
         particleAttractionJob.paJob_GaussianAttractionExponent = 2 * GaussianAttraction * GaussianAttraction; 
         #endregion
         #region Velocity
-        particleAttractionJob.paJob_MinVelocity = MinVelocity;
         particleAttractionJob.paJob_VelocityLerp = VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
@@ -1021,7 +1017,6 @@ public class TheOtherFactor : MonoBehaviour
         [ReadOnly] public float paJob_GaussianAttractionExponent;
         #endregion
         #region Veloctiy
-        [ReadOnly] public float paJob_MinVelocity;
         [ReadOnly] public float paJob_VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
@@ -1082,20 +1077,12 @@ public class TheOtherFactor : MonoBehaviour
                 velocityR *= paJob_PartilesAttractionLR[particleIndex].y;
                 #endregion
 
-                #region Update Particle Velocity, Position and Color
+                #region Update Particle Velocity, Size and Color
                 #region Veloctiy
                 Vector3 velocity = velocityL + velocityR;
-                velocity = math.max(velocity, velocity.normalized * paJob_MinVelocity);
                 velocity = math.lerp(velocities[particleIndex], velocity, paJob_VelocityLerp);
                 paJob_PreviousVelocities[particleIndex] = velocity;
                 velocities[particleIndex] = velocity;
-                #endregion
-                #region Color
-                // Compute particle color
-                Color color = ComputeParticleColor(velocity);
-                colors[particleIndex] = Color.Lerp(colors[particleIndex], color, paJob_ColorLerp);
-                // For Debugging, it can make sense to color the two groups of particles in distinct colors
-                //colors[particleIndex] = particleIndex < particles.count / 2 ? Color.green : Color.red;
                 #endregion
                 #region Size
                 float distanceL = math.length(worldPositionL - particlePosition);
@@ -1108,6 +1095,16 @@ public class TheOtherFactor : MonoBehaviour
                 float targetSize = math.lerp(paJob_ParticleSizeMinMax.x, paJob_ParticleSizeMinMax.y, inverseNormalizedDistance);
 
                 sizes[i] = math.lerp(sizes[i], targetSize, paJob_SizeLerp);
+                #endregion
+                #region Color
+                // Compute particle color
+                //Color color = ComputeParticleColor(velocity);
+                //colors[particleIndex] = Color.Lerp(colors[particleIndex], color, paJob_ColorLerp);
+                // For Debugging, it can make sense to color the two groups of particles in distinct colors
+                //colors[particleIndex] = particleIndex < particles.count / 2 ? Color.green : Color.red;
+                Color color = Color.white;
+                color.a = math.lerp(1, 0, inverseNormalizedDistance);
+                colors[particleIndex] = color;
                 #endregion
                 #endregion
             }

@@ -11605,23 +11605,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   DisplayOculusHands: 0
   ParticlesPerHand: 35000
-  ParticleSizeMinMax: {x: 0.01, y: 0.1}
-  DistanceForMinSize: 0.001
-  SizeLerp: 0.05
+  ParticleSizeMinMax: {x: 0.0001, y: 50}
+  DistanceForMinSize: 0.0005
+  SizeLerp: 0.001
   ParticleMaterial: {fileID: 2100000, guid: b737c9e8b476bc64e82fad8705ad71e3, type: 2}
-  GaussianAttraction: 1
-  MinVelocity: 0.5
-  VelocityLerp: 0.1
+  GaussianAttraction: 0.3
+  VelocityLerp: 0.05
   ParticlesAttractionGroup1: {x: 1, y: 1}
   ParticlesAttractionGroup2: {x: 1, y: 1}
-  PerParticleScalingMinMax: {x: 0, y: 1}
-  PerParticleScalingPowerFactor: 2
+  PerParticleScalingMinMax: {x: 0.001, y: 1}
+  PerParticleScalingPowerFactor: 0.1
   cwp_PositionOffsetMinMax: {x: 0, y: 0.7}
   IndexStepSizeMinMax: {x: 0, y: 2}
-  ColorLerp: 0.025
+  ColorLerp: 0.1
   StartAtPlay: 1
   StartAtPlayInvokeTime: 2
-  RunJobs: 0
+  RunJobs: 1
 --- !u!1 &4280229296399175163
 GameObject:
   m_ObjectHideFlags: 0
