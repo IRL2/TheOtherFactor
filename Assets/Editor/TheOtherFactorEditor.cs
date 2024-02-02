@@ -18,7 +18,7 @@ public class TheOtherFactorEditor : Editor
             }
             else
             {
-                script.DelayedStart();
+                script.StartTheOtherFactor();
             }
         }
     }
