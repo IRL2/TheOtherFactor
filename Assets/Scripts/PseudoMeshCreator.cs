@@ -11,6 +11,7 @@ using UnityEngine.ParticleSystemJobs;
 using System.Threading.Tasks;
 using System;
 using System.Linq;
+using Unity.VisualScripting;
 
 public class PseudoMeshCreator : MonoBehaviour
 {
@@ -43,8 +44,8 @@ public class PseudoMeshCreator : MonoBehaviour
         public string jointName;
         public List<Vector3> relativePositions = new List<Vector3>();
     }
-    private List<JointData> JointOnMeshMap1 = new List<JointData>();
-    private List<JointData> JointOnMeshMap2 = new List<JointData>();
+    private List<JointData> JointOnMeshMapL = new List<JointData>();
+    private List<JointData> JointOnMeshMapR = new List<JointData>();
     #endregion
     #region Relative Positions and Joint Indices
     public List<Vector3> LeftHandRelativePositions = new List<Vector3>();
@@ -436,12 +437,12 @@ public class PseudoMeshCreator : MonoBehaviour
     public void CreateJointOnMeshMaps()
     {
         // Clear existing data
-        JointOnMeshMap1.Clear();
-        JointOnMeshMap2.Clear();
+        JointOnMeshMapL.Clear();
+        JointOnMeshMapR.Clear();
 
         // Create a temporary dictionary to store the joint data for efficient lookup
-        Dictionary<int, JointData> jointDataDict1 = new Dictionary<int, JointData>();
-        Dictionary<int, JointData> jointDataDict2 = new Dictionary<int, JointData>();
+        Dictionary<int, JointData> jointDataDictL = new Dictionary<int, JointData>();
+        Dictionary<int, JointData> jointDataDictR = new Dictionary<int, JointData>();
 
         // Method to process joint data for a hand
         void ProcessHandData(List<Transform> joints, List<int> jointIndices, List<Vector3> relativePositions, Dictionary<int, JointData> jointDataDict)
@@ -470,12 +471,13 @@ public class PseudoMeshCreator : MonoBehaviour
         }
 
         // Process data for left and right Hands
-        ProcessHandData(LeftHandJoints, LeftHandJointIndices, LeftHandRelativePositions, jointDataDict1);
-        ProcessHandData(RightHandJoints, RightHandJointIndices, RightHandRelativePositions, jointDataDict2);
+        ProcessHandData(LeftHandJoints, LeftHandJointIndices, LeftHandRelativePositions, jointDataDictL);
+        ProcessHandData(RightHandJoints, RightHandJointIndices, RightHandRelativePositions, jointDataDictR);
 
-        JointOnMeshMap1.AddRange(jointDataDict1.Values);
-        JointOnMeshMap2.AddRange(jointDataDict2.Values);
+        JointOnMeshMapL.AddRange(jointDataDictL.Values);
+        JointOnMeshMapR.AddRange(jointDataDictR.Values);
     }
+    
     /// <summary>
     /// Generates detailed particle paths for each hand's mesh based on joint information.
     /// It processes each hand's joints and the particles that where associated with it by distance to create a sequential traversal path for particles along the hand mesh.
@@ -498,26 +500,27 @@ public class PseudoMeshCreator : MonoBehaviour
             {
                 string jointName = jointPath[pathIndex].name;
                 // Find the JointData corresponding to the current joint name
-                JointData jointData = JointOnMeshMap.Find(jd => jd.jointName == jointName);
+                JointData jointDataList = JointOnMeshMap.Find(jd => jd.jointName == jointName);
 
-                if (jointData != null)
+                if (jointDataList != null)
                 {
                     // Add joint index for each relative position
-                    foreach (var pos in jointData.relativePositions)
+                    foreach (var pos in jointDataList.relativePositions)
                     {
-                        jointIndices.Add(jointData.jointIndex);
+                        jointIndices.Add(jointDataList.jointIndex);
                     }
 
                     // Add relative positions
-                    relativePos.AddRange(jointData.relativePositions);
+                    relativePos.AddRange(jointDataList.relativePositions);
                 }
             }
         }
 
-        GenerateMeshTraversalPath(LeftHandJoints, LeftHandJointIndices, LeftHandRelativePositions, JointOnMeshMap1);
-        GenerateMeshTraversalPath(RightHandJoints, RightHandJointIndices, RightHandRelativePositions, JointOnMeshMap2);
+        GenerateMeshTraversalPath(LeftHandJoints, LeftHandJointIndices, LeftHandRelativePositions, JointOnMeshMapL);
+        GenerateMeshTraversalPath(RightHandJoints, RightHandJointIndices, RightHandRelativePositions, JointOnMeshMapR);
     }
     #endregion
+    
     #region Calculate Percentage Of Entries
     public List<float> CalculatePercentageOfEntries(List<int> inputList)
     {
@@ -555,9 +558,9 @@ public class PseudoMeshCreator : MonoBehaviour
     /// Gets a request from TheOtherFactor to provide JointIndices and RealtivePosition lists for a hand with a given size.
     /// Provides it by using precomputed percentage of points for each joint.
     /// </summary>
-    public (List<int>, List<Vector3>) ResizeListsPreservingPercentages( int targetLength, string hand)
+    public (List<int>, List<Vector3>) ResizeListsPreservingPercentages(int targetLength, string hand)
     {
-        if (hand != "left" &&  hand != "right")
+        if (hand != "left" && hand != "right")
         {
             throw new ArgumentException("Invalid hand string provided.");
         }
@@ -572,14 +575,11 @@ public class PseudoMeshCreator : MonoBehaviour
             originalRelativePositions = LeftHandRelativePositions;
             percentages = LeftHandPercentages;
         }
-        else
+        else if (hand == "right")
         {
-            if (hand == "right")
-            {
-                originalIndices = RightHandJointIndices;
-                originalRelativePositions = RightHandRelativePositions;
-                percentages = RightHandPercentages;
-            }
+            originalIndices = RightHandJointIndices;
+            originalRelativePositions = RightHandRelativePositions;
+            percentages = RightHandPercentages;
         }
 
         if (originalIndices.Count != originalRelativePositions.Count || originalIndices.Count == 0 || targetLength <= 0 || targetLength > originalIndices.Count)
@@ -587,29 +587,42 @@ public class PseudoMeshCreator : MonoBehaviour
             throw new ArgumentException("Invalid arguments provided.");
         }
 
-        List<int> resizedIndices = new List<int>(targetLength);
-        List<Vector3> resizedRelativePositions = new List<Vector3>(targetLength);
-        Dictionary<int, int> targetCounts = new Dictionary<int, int>();
-        int totalAdded = 0;
+        List<int> resizedIndices = new List<int>();
+        List<Vector3> resizedRelativePositions = new List<Vector3>();
+        Dictionary<int, List<int>> indexPositions = new Dictionary<int, List<int>>();
 
-        // Calculate the number of elements to include for each unique integer based on precomputed percentages
-        for (int i = 0; i < percentages.Count; i++)
+        // Group positions by index
+        for (int i = 0; i < originalIndices.Count; i++)
         {
-            int countForThisInteger = (int)Math.Round(percentages[i] * targetLength / 100.0);
-            targetCounts[i] = countForThisInteger;
+            int index = originalIndices[i];
+            if (!indexPositions.ContainsKey(index))
+            {
+                indexPositions[index] = new List<int>();
+            }
+            indexPositions[index].Add(i);
         }
 
-        // Iterate through the original lists, adding elements to the result lists based on the target counts
-        for (int i = 0; i < originalIndices.Count && totalAdded < targetLength; i++)
+        foreach (var kvp in indexPositions)
         {
-            int currentInteger = originalIndices[i];
-            if (targetCounts.ContainsKey(currentInteger) && targetCounts[currentInteger] > 0)
+            int index = kvp.Key;
+            List<int> positions = kvp.Value;
+            int countForThisIndex = (int)Math.Round(percentages[index] * targetLength / 100.0);
+            // Calculate the interval for selecting positions to ensure they are spread out
+            double interval = positions.Count / (double)countForThisIndex;
+
+            for (int i = 0; i < countForThisIndex && i * interval < positions.Count; i++)
             {
-                resizedIndices.Add(currentInteger);
-                resizedRelativePositions.Add(originalRelativePositions[i]);
-                targetCounts[currentInteger]--;
-                totalAdded++;
+                int posIndex = (int)Math.Round(i * interval);
+                resizedIndices.Add(index);
+                resizedRelativePositions.Add(originalRelativePositions[positions[posIndex]]);
             }
+        }
+
+        // Ensure the resized lists are trimmed to the target length in case of rounding issues
+        if (resizedIndices.Count > targetLength)
+        {
+            resizedIndices = resizedIndices.GetRange(0, targetLength);
+            resizedRelativePositions = resizedRelativePositions.GetRange(0, targetLength);
         }
 
         return (resizedIndices, resizedRelativePositions);

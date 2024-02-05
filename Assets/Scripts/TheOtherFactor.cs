@@ -32,9 +32,9 @@ public class TheOtherFactor : MonoBehaviour
     private ParticleSystem particleSystem;
     private ParticleSystemRenderer particleRenderer;
     #endregion
-    #region Gaussian Attraction
-    [Header("Gaussian Attraction")]
-    public float GaussianAttraction = 1f;
+    #region Attraction
+    [Header("Attraction")]
+    public float AttractionStrength = 1f;
     #endregion
     #region Velocity
     [Header("Velocity")]
@@ -74,33 +74,17 @@ public class TheOtherFactor : MonoBehaviour
     private PseudoMeshCreator PseudoMeshCreator;
     #endregion
     #endregion
-    #region Internal Variables to Communicate Inspector Variables to Jobs (often needs NativeArrays)
-    #region Particle Attraction Job
+    #region Internal Variables
+    #region Attraction Job
     #region Job Handle
-    private ParticleAttractionJob particleAttractionJob;
-    private JobHandle particleAttractionJobHandle;
+    private AttractionJob attractionJob;
+    private JobHandle attractionJobHandle;
     #endregion
-    #region Attraction Scaling Per Group/Hand
-    private NativeArray<Vector2> paJob_ParticlesAttractionLR;
-    private float[] paJob_PerParticleScaling;
-    #endregion
-    #region Pseudo Mesh
-    #region Positions
-    private NativeArray<Vector3> paJob_WorldPositionsL;
-    private NativeArray<Vector3> paJob_WorldPositionsR;
-    #endregion
-    #region Indices
-    private NativeArray<int> paJob_PseudoMeshIndicesL;
-    private NativeArray<int> paJob_PseudoMeshIndicesR;
-    private NativeArray<int> paJob_StepSizes;
+    #region Per Particle Scaling
+    private float[] aJob_PerParticleScaling;
     #endregion
     #endregion
-    #region Memory
-    private NativeArray<Vector3> paJob_PreviousVelocities;
-    private NativeArray<Vector3> paJob_PreviousPositions;
-    #endregion
-    #endregion
-    #region Pseudo mesh World Positions Job
+    #region World Positions Jobs
     #region Job Handle
     private JobHandle positionJobHandleL;
     private ComputeWorldPositionJob positionJobL;
@@ -108,27 +92,7 @@ public class TheOtherFactor : MonoBehaviour
     private JobHandle positionJobHandleR;
     private ComputeWorldPositionJob positionJobR;
     #endregion
-    #region Joints
-    private NativeArray<Vector3> cwp_JointPositionsL;
-    private NativeArray<quaternion> cwp_JointRotationsL;
-    public NativeArray<int> cwp_JointToParticleMapL;
-
-    private NativeArray<Vector3> cwp_JointPositionsR;
-    private NativeArray<quaternion> cwp_JointRotationsR;
-    public NativeArray<int> cwp_JointToParticleMapR;
-    #endregion
-    #region Pseudo Mesh
-    public NativeArray<Vector3> cwp_PseudoMeshParticlePositionsL;
-    private NativeArray<Vector3> cwp_WorldPositionsL;
-    private NativeArray<Vector3> cwp_WorldPositionsLNeutral;
-
-    public NativeArray<Vector3> cwp_PseudoMeshParticlePositionsR;
-    private NativeArray<Vector3> cwp_WorldPositionsR;
-    private NativeArray<Vector3> cwp_WorldPositionsRNeutral;
-
-    #endregion
     #region Position Offsets
-    private NativeArray<float> cwp_PositionOffsets;
     private int cwp_PositionOffsetsIndex = 0;
     #endregion
     #endregion
@@ -243,32 +207,27 @@ public class TheOtherFactor : MonoBehaviour
         this.gameObject.SetActive(false);
     }
     #endregion
-    public async Task InitializeParticlesCoroutine()
+    private async Task InitializeParticlesCoroutine()
     {
         #region Fetch Pseudo Mesh
         FetchPseudoMesh();
         await Task.Yield();
         #endregion
-
         #region Initialze Runtime Arrays
-        InitializeRuntimeArrays();
+        InitializePerParticleScalingArray();
         await Task.Yield();
         #endregion
-
         #region Wait For Hands Close To HMD
         await WaitForHandsCloseToHMD(.4f);
         #endregion
-
         #region Emit Particles
         EmitParticles();
         await Task.Yield();
         #endregion
-
         #region Initialize Jobs
         InitializeRuntimeJobs();
         await Task.Yield();
         #endregion
-
         #region Activate Runtime Functions
         RunJobs = true;
         #endregion
@@ -282,88 +241,16 @@ public class TheOtherFactor : MonoBehaviour
         (RightHandJointIndices, RightHandRelativePositions) = PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "right");// PseudoMeshCreator.LeftHandRelativePositions;
     }
     #endregion
-    #region Initialize Runtime Arrays
-    public void InitializeRuntimeArrays()
+    #region Initialize Per Particle Scaling Array
+    private void InitializePerParticleScalingArray()
     {
         int totalParticles = ParticlesPerHand * 2;
-        #region Particle Attraction Job
-        #region Attraction
-        paJob_ParticlesAttractionLR = new NativeArray<Vector2>(totalParticles, Allocator.Persistent);
-        paJob_PerParticleScaling = new float[totalParticles];
+        aJob_PerParticleScaling = new float[totalParticles];
         for (int i = 0; i < totalParticles; i++)
         {
             float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
-            paJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
+            aJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
         }
-        #endregion
-        #region Pseudo Mesh
-        #region Positions
-        paJob_WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        paJob_WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        #endregion
-        #region Indices
-        paJob_PseudoMeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
-        paJob_PseudoMeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
-        for (int i = 0; i < totalParticles; i++)
-        {
-            paJob_PseudoMeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
-            paJob_PseudoMeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
-        }
-        paJob_StepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
-        for (int i = 0; i < totalParticles; i++)
-        {
-            paJob_StepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
-        }
-        #endregion
-        #endregion
-        #region Memory
-        paJob_PreviousVelocities = new NativeArray<Vector3>(totalParticles, Allocator.Persistent);
-        paJob_PreviousPositions = new NativeArray<Vector3>(totalParticles, Allocator.Persistent);
-        #endregion
-        #endregion
-        #region Compute World Positions Job
-        #region Joints
-        cwp_JointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
-        cwp_JointRotationsL = new NativeArray<quaternion>(LeftHandJoints.Count, Allocator.Persistent);
-        cwp_JointToParticleMapL = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
-        for (int i = 0; i < LeftHandJointIndices.Count; i++)
-        {
-            cwp_JointToParticleMapL[i] = LeftHandJointIndices[i];
-        }
-
-        cwp_JointPositionsR = new NativeArray<Vector3>(RightHandJoints.Count, Allocator.Persistent);
-        cwp_JointRotationsR = new NativeArray<quaternion>(RightHandJoints.Count, Allocator.Persistent);
-        cwp_JointToParticleMapR = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
-        for (int i = 0; i < RightHandJointIndices.Count; i++)
-        {
-            cwp_JointToParticleMapR[i] = RightHandJointIndices[i];
-        }
-        #endregion
-        #region Pseudo Mesh
-        cwp_PseudoMeshParticlePositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        for (int i = 0; i < LeftHandJointIndices.Count; i++)
-        {
-            cwp_PseudoMeshParticlePositionsL[i] = LeftHandRelativePositions[i];
-        }
-        cwp_WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        cwp_WorldPositionsLNeutral = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-
-        cwp_PseudoMeshParticlePositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        for (int i = 0; i < RightHandJointIndices.Count; i++)
-        {
-            cwp_PseudoMeshParticlePositionsR[i] = RightHandRelativePositions[i];
-        }
-        cwp_WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        cwp_WorldPositionsRNeutral = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        #endregion
-        #region World Position Offsets
-        cwp_PositionOffsets = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
-        for (int i = 0; i < ParticlesPerHand; i++)
-        {
-            cwp_PositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(cwp_PositionOffsetMinMax.x, cwp_PositionOffsetMinMax.y));
-        }
-        #endregion
-        #endregion
     }
     #endregion
     # region Wait For Hands Close To HMD
@@ -435,43 +322,93 @@ public class TheOtherFactor : MonoBehaviour
     #region Initialize Jobs
     private void InitializeRuntimeJobs()
     {
-        particleAttractionJob = new ParticleAttractionJob
+        int totalParticles = ParticlesPerHand * 2;
+        #region AttractionJob
+        #region Initialize Arrays
+        #region Attraction Scaling Per Group/Hand
+        NativeArray<Vector2> aJob_ParticlesAttractionLR = new NativeArray<Vector2>(totalParticles, Allocator.Persistent);
+        #endregion
+        #region Pseudo Mesh
+        #region Positions
+        NativeArray<Vector3> aJob_WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> aJob_WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        #endregion
+        #region Indices
+        NativeArray<int> aJob_PseudoMeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> aJob_PseudoMeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        for (int i = 0; i < totalParticles; i++)
         {
-            #region Gaussian Attraction
-            paJob_GaussianAttraction = GaussianAttraction,
-            paJob_GaussianAttractionExponent = 2 * GaussianAttraction * GaussianAttraction,
+            aJob_PseudoMeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            aJob_PseudoMeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+        }
+        NativeArray<int> aJob_IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        for (int i = 0; i < totalParticles; i++)
+        {
+            aJob_IndexStepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
+        }
+        #endregion
+        #endregion
+        #endregion
+        attractionJob = new AttractionJob
+        {
+            #region Attraction
+            aJob_AttractionStrength = AttractionStrength,
+            aJob_AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength,
             #endregion
             #region Velocity
-            paJob_VelocityLerp = VelocityLerp,
+            aJob_VelocityLerp = VelocityLerp,
             #endregion
             #region Attraction Scaling Per Group/Hand
-            paJob_PartilesAttractionLR = paJob_ParticlesAttractionLR,
+            aJob_ParticlesAttractionLR = aJob_ParticlesAttractionLR,
             #endregion
             #region Pseudo Mesh
             #region Positions
-            paJob_WorldPositionsL = paJob_WorldPositionsL,
-            paJob_WorldPositionsR = paJob_WorldPositionsR,
+            aJob_WorldPositionsL = aJob_WorldPositionsL,
+            aJob_WorldPositionsR = aJob_WorldPositionsR,
             #endregion
             #region Indices
-            paJob_PseudoMeshIndicesL = paJob_PseudoMeshIndicesL,
-            paJob_PseudoMeshIndicesR = paJob_PseudoMeshIndicesR,
-            paJob_IndexStepSizes = paJob_StepSizes,
-            paJob_IndexStepsSizeIndex = 0,
+            aJob_PseudoMeshIndicesL = aJob_PseudoMeshIndicesL,
+            aJob_PseudoMeshIndicesR = aJob_PseudoMeshIndicesR,
+            aJob_IndexStepSizes = aJob_IndexStepSizes,
+            aJob_IndexStepsSizeIndex = 0,
             #endregion
-            #endregion
-            #region Memory
-            paJob_PreviousVelocities = paJob_PreviousVelocities,
-            paJob_PreviousPositions = paJob_PreviousPositions,
             #endregion
             #region Color
-            paJob_ColorLerp = ColorLerp,
+            aJob_ColorLerp = ColorLerp,
             #endregion
             #region Size
-            paJob_ParticleSizeMinMax = ParticleSizeMinMax,
-            paJob_DistanceForMinSize = DistanceForMinSize,
-            paJob_SizeLerp = SizeLerp,
+            aJob_ParticleSizeMinMax = ParticleSizeMinMax,
+            aJob_DistanceForMinSize = DistanceForMinSize,
+            aJob_SizeLerp = SizeLerp,
             #endregion
         };
+        #endregion
+        #region Position Jobs
+        #region World Position Offsets
+        NativeArray<float> cwp_PositionOffsets = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < ParticlesPerHand; i++)
+        {
+            cwp_PositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(cwp_PositionOffsetMinMax.x, cwp_PositionOffsetMinMax.y));
+        }
+        #endregion
+        #region Position Job L
+        #region Joints
+        NativeArray<Vector3> cwp_JointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> cwp_JointRotationsL = new NativeArray<quaternion>(LeftHandJoints.Count, Allocator.Persistent);
+        NativeArray<int> cwp_JointToParticleMapL = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < LeftHandJointIndices.Count; i++)
+        {
+            cwp_JointToParticleMapL[i] = LeftHandJointIndices[i];
+        }
+        #endregion
+        #region Pseudo Mesh
+        NativeArray<Vector3> cwp_PseudoMeshParticlePositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < LeftHandJointIndices.Count; i++)
+        {
+            cwp_PseudoMeshParticlePositionsL[i] = LeftHandRelativePositions[i];
+        }
+        NativeArray<Vector3> cwp_WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        #endregion
         positionJobL = new ComputeWorldPositionJob
         {
             #region Joints
@@ -488,6 +425,25 @@ public class TheOtherFactor : MonoBehaviour
             cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex
             #endregion
         };
+        #endregion
+        #region Position Job R
+        #region Joints
+        NativeArray<Vector3> cwp_JointPositionsR = new NativeArray<Vector3>(RightHandJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> cwp_JointRotationsR = new NativeArray<quaternion>(RightHandJoints.Count, Allocator.Persistent);
+        NativeArray<int> cwp_JointToParticleMapR = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < RightHandJointIndices.Count; i++)
+        {
+            cwp_JointToParticleMapR[i] = RightHandJointIndices[i];
+        }
+        #endregion
+        #region Pseudo Mesh
+        NativeArray<Vector3> cwp_PseudoMeshParticlePositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < RightHandJointIndices.Count; i++)
+        {
+            cwp_PseudoMeshParticlePositionsR[i] = RightHandRelativePositions[i];
+        }
+        NativeArray<Vector3> cwp_WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        #endregion
         positionJobR = new ComputeWorldPositionJob
         {
             #region Joints
@@ -504,18 +460,40 @@ public class TheOtherFactor : MonoBehaviour
             cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex
             #endregion
         };
+        #endregion
+        #endregion
     }
     #endregion
     #endregion
     #region Runtime Updates
     void OnParticleUpdateJobScheduled()
     {
-        if (RunJobs && particleAttractionJobHandle.IsCompleted && positionJobHandleL.IsCompleted && positionJobHandleR.IsCompleted)
+        if (RunJobs && attractionJobHandle.IsCompleted && positionJobHandleL.IsCompleted && positionJobHandleR.IsCompleted)
         {
             if (isEvenFrame)
             {
                 #region World Position Jobs
-                cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex < cwp_PositionOffsets.Length ? cwp_PositionOffsetsIndex + 1 : 0;
+                cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex < positionJobL.cwp_PositionOffsets.Length ? cwp_PositionOffsetsIndex + 1 : 0;
+                #region Schedule PositionL Job
+                positionJobHandleL.Complete();
+                #region Update Joint Positions
+                for (int i = 0; i < positionJobL.cwp_JointPositions.Length; i++)
+                {
+                    positionJobL.cwp_JointPositions[i] = LeftHandJoints[i].position;
+                    positionJobL.cwp_JointRotations[i] = LeftHandJoints[i].rotation;                   
+                }
+                #endregion
+                #region Update World Positions in Neutral Array for Attraction Job to Read
+                for (int i = 0; i < positionJobL.cwp_WorldPositions.Length; i++)
+                {
+                    attractionJob.aJob_WorldPositionsL[i] = positionJobL.cwp_WorldPositions[i];
+                }
+                #endregion
+                #region Update PositionOffsetsIndex
+                positionJobL.cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex;
+                #endregion
+                if (positionJobL.cwp_JointPositions.Length > 0) positionJobHandleL = positionJobL.Schedule(particleSystem.particleCount / 2, 1024);
+                #endregion
                 #region Schedule PositionR Job
                 positionJobHandleR.Complete();
                 #region Update Joint Positions
@@ -528,7 +506,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update World Positions in Neutral Array for Attraction Job to Read
                 for (int i = 0; i < positionJobR.cwp_WorldPositions.Length; i++)
                 {
-                    cwp_WorldPositionsRNeutral[i] = positionJobR.cwp_WorldPositions[i];
+                    attractionJob.aJob_WorldPositionsR[i] = positionJobR.cwp_WorldPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
@@ -537,37 +515,14 @@ public class TheOtherFactor : MonoBehaviour
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (positionJobR.cwp_JointPositions.Length > 0) positionJobHandleR = positionJobR.Schedule(particleSystem.particleCount / 2, 1024);
                 #endregion
-                #region Schedule PositionL Job
-                positionJobHandleL.Complete();
-                #region Update Joint Positions
-                for (int i = 0; i < positionJobL.cwp_JointPositions.Length; i++)
-                {
-                    if (LeftHandJoints[i] != null)
-                    {
-                        positionJobL.cwp_JointPositions[i] = LeftHandJoints[i].position;
-                        positionJobL.cwp_JointRotations[i] = LeftHandJoints[i].rotation;
-                    }
-                }
-                #endregion
-                #region Update World Positions in Neutral Array for Attraction Job to Read
-                for (int i = 0; i < positionJobL.cwp_WorldPositions.Length; i++)
-                {
-                    cwp_WorldPositionsLNeutral[i] = positionJobL.cwp_WorldPositions[i];
-                }
-                #endregion
-                #region Update PositionOffsetsIndex
-                positionJobL.cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex;
-                #endregion
-                if(positionJobL.cwp_JointPositions.Length > 0) positionJobHandleL = positionJobL.Schedule(particleSystem.particleCount / 2, 1024);
-                #endregion
                 #endregion
             }
             else
-            {
+            { 
                 #region Attraction Job
-                particleAttractionJobHandle.Complete();
+                attractionJobHandle.Complete();
                 UpdateAttractionJob();
-                particleAttractionJobHandle = particleAttractionJob.ScheduleBatch(particleSystem, 1024);
+                attractionJobHandle = attractionJob.ScheduleBatch(particleSystem, 1024);
                 #endregion
             }
             UpdateParticleMaterialAndHandVisual();
@@ -582,105 +537,98 @@ public class TheOtherFactor : MonoBehaviour
     }
     private void UpdateAttractionJob()
     {
-        #region Gaussian Attraction
-        particleAttractionJob.paJob_GaussianAttraction =  GaussianAttraction;
-        particleAttractionJob.paJob_GaussianAttractionExponent = 2 * GaussianAttraction * GaussianAttraction; 
+        #region Attraction
+        attractionJob.aJob_AttractionStrength =  AttractionStrength;
+        attractionJob.aJob_AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength; 
         #endregion
         #region Velocity
-        particleAttractionJob.paJob_VelocityLerp = VelocityLerp;
+        attractionJob.aJob_VelocityLerp = VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
         UpdateParticlesAttractionLR();
-        particleAttractionJob.paJob_PartilesAttractionLR = paJob_ParticlesAttractionLR;
         #endregion
         #region Pseudo Mesh
-        #region World Positions
-        for (int i = 0; i < particleAttractionJob.paJob_WorldPositionsR.Length; i++)
-        {
-            particleAttractionJob.paJob_WorldPositionsR[i] = cwp_WorldPositionsRNeutral[i];
-        }
-        for (int i = 0; i < particleAttractionJob.paJob_WorldPositionsL.Length; i++)
-        {
-            particleAttractionJob.paJob_WorldPositionsL[i] = cwp_WorldPositionsLNeutral[i];
-        }
-        #endregion
         #region Indices
-        particleAttractionJob.paJob_IndexStepsSizeIndex = particleAttractionJob.paJob_IndexStepsSizeIndex < paJob_StepSizes.Length ? particleAttractionJob.paJob_IndexStepsSizeIndex + 1 : 0;
+        attractionJob.aJob_IndexStepsSizeIndex = attractionJob.aJob_IndexStepsSizeIndex < attractionJob.aJob_IndexStepSizes.Length ? attractionJob.aJob_IndexStepsSizeIndex + 1 : 0;
         #endregion
         #endregion
         #region Color
-        particleAttractionJob.paJob_ColorLerp = ColorLerp;
+        attractionJob.aJob_ColorLerp = ColorLerp;
         #endregion
         #region Size
-        particleAttractionJob.paJob_ParticleSizeMinMax = ParticleSizeMinMax;
-        particleAttractionJob.paJob_DistanceForMinSize = DistanceForMinSize;
-        particleAttractionJob.paJob_SizeLerp = SizeLerp;
+        attractionJob.aJob_ParticleSizeMinMax = ParticleSizeMinMax;
+        attractionJob.aJob_DistanceForMinSize = DistanceForMinSize;
+        attractionJob.aJob_SizeLerp = SizeLerp;
         #endregion
     }
     private void UpdateParticlesAttractionLR()
     {
+        int totalParticles = ParticlesPerHand * 2;
+        for (int i = 0; i < totalParticles; i++)
+        {
+            float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
+            aJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
+        }
+
         Vector2 attractionVector = Vector2.one;
 
-        for (int i = 0; i < paJob_ParticlesAttractionLR.Length; i++)
+        for (int i = 0; i < attractionJob.aJob_ParticlesAttractionLR.Length; i++)
         {
-            if (i < paJob_ParticlesAttractionLR.Length / 2)
+            if (i < attractionJob.aJob_ParticlesAttractionLR.Length / 2)
             {
                 attractionVector.x = ParticlesAttractionGroup1.x;
-                attractionVector.y = ParticlesAttractionGroup1.y * paJob_PerParticleScaling[i];
+                attractionVector.y = ParticlesAttractionGroup1.y * aJob_PerParticleScaling[i];
             }
             else
             {
-                attractionVector.x = ParticlesAttractionGroup2.x * paJob_PerParticleScaling[i];
+                attractionVector.x = ParticlesAttractionGroup2.x * aJob_PerParticleScaling[i];
                 attractionVector.y = ParticlesAttractionGroup2.y;
             }
-            paJob_ParticlesAttractionLR[i] = attractionVector.normalized;
+             
+            attractionJob.aJob_ParticlesAttractionLR[i] = attractionVector;
         }
     }
     #endregion
     #region Jobs
     #region Attraction Job
     /// <summary>
-    /// This job uses GaussianAttraction parameters to control attraction strength
+    /// This job uses AttractionStrength parameters to control attraction strength
     /// and updates particle positions and velocities based on attraction to specific world positions. It handles particles for both left and right Hands.
     /// The job also includes logic for color copmutation based on the particles velocity.
     /// </summary>
     [BurstCompile]
-    struct ParticleAttractionJob : IJobParticleSystemParallelForBatch
+    struct AttractionJob : IJobParticleSystemParallelForBatch
     {
         #region Job Variables
-        #region Gaussian Attraction
-        [ReadOnly] public float paJob_GaussianAttraction;
-        [ReadOnly] public float paJob_GaussianAttractionExponent;
+        #region Attraction
+        [ReadOnly] public float aJob_AttractionStrength;
+        [ReadOnly] public float aJob_AttractionExponentDivisor;
         #endregion
         #region Veloctiy
-        [ReadOnly] public float paJob_VelocityLerp;
+        [ReadOnly] public float aJob_VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
-        [ReadOnly] public NativeArray<Vector2> paJob_PartilesAttractionLR;
+        [ReadOnly] public NativeArray<Vector2> aJob_ParticlesAttractionLR;
         #endregion
         #region Pseudo Mesh
         #region Positions
-        [ReadOnly] public NativeArray<Vector3> paJob_WorldPositionsL;
-        [ReadOnly] public NativeArray<Vector3> paJob_WorldPositionsR;
+        [ReadOnly] public NativeArray<Vector3> aJob_WorldPositionsL;
+        [ReadOnly] public NativeArray<Vector3> aJob_WorldPositionsR;
         #endregion
         #region Indices
-        public NativeArray<int> paJob_PseudoMeshIndicesL;
-        public NativeArray<int> paJob_PseudoMeshIndicesR;
-        [ReadOnly] public NativeArray<int> paJob_IndexStepSizes;
-        [ReadOnly] public int paJob_IndexStepsSizeIndex;
+        public NativeArray<int> aJob_PseudoMeshIndicesL;
+        public NativeArray<int> aJob_PseudoMeshIndicesR;
+        [ReadOnly] public NativeArray<int> aJob_IndexStepSizes;
+        [ReadOnly] public int aJob_IndexStepsSizeIndex;
         #endregion
-        #endregion
-        #region Memory
-        public NativeArray<Vector3> paJob_PreviousVelocities;
-        public NativeArray<Vector3> paJob_PreviousPositions;
         #endregion
         #region Color
-        [ReadOnly] public float paJob_ColorLerp;
+        [ReadOnly] public float aJob_ColorLerp;
         #endregion
         #region Size
-        [ReadOnly] public Vector2 paJob_ParticleSizeMinMax;
-        [ReadOnly] public float paJob_DistanceForMinSize;
-        [ReadOnly] public float paJob_SizeLerp;
+        [ReadOnly] public Vector2 aJob_ParticleSizeMinMax;
+        [ReadOnly] public float aJob_DistanceForMinSize;
+        [ReadOnly] public float aJob_SizeLerp;
         #endregion
         #endregion
         public void Execute(ParticleSystemJobData particles, int startIndex, int count)
@@ -699,25 +647,24 @@ public class TheOtherFactor : MonoBehaviour
                 Vector3 particlePosition = positions[particleIndex];
 
                 #region Compute Attraction to Left Hand
-                int pseudoMeshPosIndexL = paJob_PseudoMeshIndicesL[particleIndex];
-                Vector3 worldPositionL = paJob_WorldPositionsL[pseudoMeshPosIndexL];
-                paJob_PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + paJob_IndexStepSizes[(particleIndex + paJob_IndexStepsSizeIndex) % paJob_WorldPositionsL.Length]) % paJob_WorldPositionsL.Length;
-                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, paJob_GaussianAttractionExponent, paJob_GaussianAttraction);
-                velocityL *= paJob_PartilesAttractionLR[particleIndex].x;
+                int pseudoMeshPosIndexL = aJob_PseudoMeshIndicesL[particleIndex];
+                Vector3 worldPositionL = aJob_WorldPositionsL[pseudoMeshPosIndexL];
+                aJob_PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + aJob_IndexStepSizes[(particleIndex + aJob_IndexStepsSizeIndex) % aJob_WorldPositionsL.Length]) % aJob_WorldPositionsL.Length;
+                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, aJob_AttractionExponentDivisor, aJob_AttractionStrength);
+                velocityL *= aJob_ParticlesAttractionLR[particleIndex].x;
                 #endregion
                 #region Compute Attraction to Right Hand
-                int pseudoMeshPosIndexR = paJob_PseudoMeshIndicesR[particleIndex];
-                Vector3 worldPositionR = paJob_WorldPositionsR[pseudoMeshPosIndexR];
-                paJob_PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + paJob_IndexStepSizes[(particleIndex + paJob_IndexStepsSizeIndex) % paJob_WorldPositionsR.Length]) % paJob_WorldPositionsR.Length;
-                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, paJob_GaussianAttractionExponent, paJob_GaussianAttraction);
-                velocityR *= paJob_PartilesAttractionLR[particleIndex].y;
+                int pseudoMeshPosIndexR = aJob_PseudoMeshIndicesR[particleIndex];
+                Vector3 worldPositionR = aJob_WorldPositionsR[pseudoMeshPosIndexR];
+                aJob_PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + aJob_IndexStepSizes[(particleIndex + aJob_IndexStepsSizeIndex) % aJob_WorldPositionsR.Length]) % aJob_WorldPositionsR.Length;
+                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, aJob_AttractionExponentDivisor, aJob_AttractionStrength);
+                velocityR *= aJob_ParticlesAttractionLR[particleIndex].y;
                 #endregion
 
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
                 Vector3 velocity = velocityL + velocityR;
-                velocity = math.lerp(velocities[particleIndex], velocity, paJob_VelocityLerp);
-                paJob_PreviousVelocities[particleIndex] = velocity;
+                velocity = math.lerp(velocities[particleIndex], velocity, aJob_VelocityLerp);
                 velocities[particleIndex] = velocity;
                 #endregion
                 #region Size
@@ -726,21 +673,21 @@ public class TheOtherFactor : MonoBehaviour
                 float leastDistance = math.min(distanceL, distanceR); 
 
                 // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
-                float normalizedDistance = math.clamp(leastDistance / paJob_DistanceForMinSize, 0f, 1f);
+                float normalizedDistance = math.clamp(leastDistance / aJob_DistanceForMinSize, 0f, 1f);
                 float inverseNormalizedDistance = 1 - normalizedDistance;
-                float targetSize = math.lerp(paJob_ParticleSizeMinMax.x, paJob_ParticleSizeMinMax.y, inverseNormalizedDistance);
+                float targetSize = math.lerp(aJob_ParticleSizeMinMax.x, aJob_ParticleSizeMinMax.y, inverseNormalizedDistance);
 
-                sizes[i] = math.lerp(sizes[i], targetSize, paJob_SizeLerp);
+                sizes[i] = math.lerp(sizes[i], targetSize, aJob_SizeLerp);
                 #endregion
                 #region Color
                 // Compute particle color
-                //Color color = ComputeParticleColor(velocity);
-                //colors[particleIndex] = Color.Lerp(colors[particleIndex], color, paJob_ColorLerp);
+                Color color = ComputeParticleColor(velocity);
+                colors[particleIndex] = Color.Lerp(colors[particleIndex], color, aJob_ColorLerp);
                 // For Debugging, it can make sense to color the two groups of particles in distinct colors
                 //colors[particleIndex] = particleIndex < particles.count / 2 ? Color.green : Color.red;
-                Color color = Color.white;
-                color.a = math.lerp(1, 0, inverseNormalizedDistance);
-                colors[particleIndex] = color;
+                //Color color = Color.white;
+                //color.a = math.lerp(1, 0, inverseNormalizedDistance);
+                //colors[particleIndex] = color;
                 #endregion
                 #endregion
             }
@@ -748,16 +695,16 @@ public class TheOtherFactor : MonoBehaviour
         #region Functions
         #region Calculate Attraction Velocity
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector3 CalculateAttractionVelocity(Vector3 worldPosition, Vector3 particlePosition, float exponentAttraction, float gaussianAttractionFactor)
+        private static Vector3 CalculateAttractionVelocity(Vector3 worldPosition, Vector3 particlePosition, float exponentAttractionDivisor, float attractionStrength)
         {
             // Calculate the direction and distance from the particle to the world position
             Vector3 direction = worldPosition - particlePosition;
 
             // Calculate the exponent for the Gaussian distribution based on the distance and attraction strength
-            float exponent = -math.lengthsq(direction) /  exponentAttraction;
+            float exponent = -math.lengthsq(direction) /  exponentAttractionDivisor;
 
             // Apply the Gaussian distribution to calculate the attraction force
-            float attraction = gaussianAttractionFactor * math.exp(exponent);
+            float attraction = attractionStrength * math.exp(exponent);
 
             float distance = math.length(direction);
             attraction *= 1 - distance;
@@ -839,48 +786,13 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
     }
     #endregion
-    #region Dispose Native Arrays On Disable
+    #region Complete Jobs On Disable
     void OnDisable()
     {
         #region Complete Jobs
-        particleAttractionJobHandle.Complete();
+        attractionJobHandle.Complete();
         positionJobHandleL.Complete();
         positionJobHandleR.Complete();
-        #endregion
-        #region Particle Attraction Job
-        #region Attraction
-        paJob_ParticlesAttractionLR.Dispose();
-        #endregion
-        #region Pseudo Mesh
-        #region Positions
-        paJob_WorldPositionsL.Dispose();
-        paJob_WorldPositionsR.Dispose();
-        #endregion
-        #region Indices
-        paJob_PseudoMeshIndicesL.Dispose();
-        paJob_PseudoMeshIndicesR.Dispose();
-        #endregion
-        #endregion
-        #region Memory
-        paJob_PreviousVelocities.Dispose();
-        paJob_PreviousPositions.Dispose();
-        #endregion
-        #endregion
-        #region Pseudo Mesh World Position Job
-        #region Joints
-        cwp_JointPositionsL.Dispose();
-        cwp_JointPositionsR.Dispose();
-        cwp_JointRotationsL.Dispose();
-        cwp_JointRotationsR.Dispose();
-        cwp_JointToParticleMapL.Dispose();
-        cwp_JointToParticleMapR.Dispose();
-        #endregion
-        #region Pseudo Mesh
-        cwp_WorldPositionsL.Dispose();
-        cwp_WorldPositionsR.Dispose();
-        cwp_PseudoMeshParticlePositionsL.Dispose();
-        cwp_PseudoMeshParticlePositionsR.Dispose();
-        #endregion
         #endregion
     }
     #endregion
