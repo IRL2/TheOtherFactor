@@ -563,13 +563,6 @@ public class TheOtherFactor : MonoBehaviour
     }
     private void UpdateParticlesAttractionLR()
     {
-        int totalParticles = ParticlesPerHand * 2;
-        for (int i = 0; i < totalParticles; i++)
-        {
-            float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
-            aJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
-        }
-
         Vector2 attractionVector = Vector2.one;
 
         for (int i = 0; i < attractionJob.aJob_ParticlesAttractionLR.Length; i++)
