@@ -66,8 +66,15 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Color
     [Header("Color")]
+    public bool UseDebugColors = false;
+    private Color BaseColor = Color.blue;
+    public Gradient BaseColorTimeGradient;
+    public float ColorTimeGradientUpdateSpeed = 3.14f;
     [Tooltip("The linear interpolation factor for color change in one opdate step.")]
     public float ColorLerp = .05f;
+    public float HeartbeatSpeed = 1f;
+    public bool UseHeartbeat = true;
+    public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
     #endregion
     #region Pseudo Mesh
     [Header("Pseudo Mesh")]
@@ -77,11 +84,11 @@ public class TheOtherFactor : MonoBehaviour
     #region Internal Variables
     #region Attraction Job
     #region Job Handle
-    private AttractionJob attractionJob;
+    private AttractionJob attractJob;
     private JobHandle attractionJobHandle;
     #endregion
     #region Per Particle Scaling
-    private float[] aJob_PerParticleScaling;
+    private float[] PerParticleScaling;
     #endregion
     #endregion
     #region World Positions Jobs
@@ -245,11 +252,11 @@ public class TheOtherFactor : MonoBehaviour
     private void InitializePerParticleScalingArray()
     {
         int totalParticles = ParticlesPerHand * 2;
-        aJob_PerParticleScaling = new float[totalParticles];
+        PerParticleScaling = new float[totalParticles];
         for (int i = 0; i < totalParticles; i++)
         {
             float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
-            aJob_PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
+            PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
         }
     }
     #endregion
@@ -326,60 +333,63 @@ public class TheOtherFactor : MonoBehaviour
         #region AttractionJob
         #region Initialize Arrays
         #region Attraction Scaling Per Group/Hand
-        NativeArray<Vector2> aJob_ParticlesAttractionLR = new NativeArray<Vector2>(totalParticles, Allocator.Persistent);
+        NativeArray<Vector2> ParticlesAttractionLR = new NativeArray<Vector2>(totalParticles, Allocator.Persistent);
         #endregion
         #region Pseudo Mesh
         #region Positions
-        NativeArray<Vector3> aJob_WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        NativeArray<Vector3> aJob_WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
         #region Indices
-        NativeArray<int> aJob_PseudoMeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
-        NativeArray<int> aJob_PseudoMeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> PseudoMeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> PseudoMeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
         for (int i = 0; i < totalParticles; i++)
         {
-            aJob_PseudoMeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
-            aJob_PseudoMeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            PseudoMeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            PseudoMeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
         }
-        NativeArray<int> aJob_IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
         for (int i = 0; i < totalParticles; i++)
         {
-            aJob_IndexStepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
+            IndexStepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
         }
         #endregion
         #endregion
         #endregion
-        attractionJob = new AttractionJob
+        attractJob = new AttractionJob
         {
             #region Attraction
-            aJob_AttractionStrength = AttractionStrength,
-            aJob_AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength,
+            AttractionStrength = AttractionStrength,
+            AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength,
             #endregion
             #region Velocity
-            aJob_VelocityLerp = VelocityLerp,
+            VelocityLerp = VelocityLerp,
             #endregion
             #region Attraction Scaling Per Group/Hand
-            aJob_ParticlesAttractionLR = aJob_ParticlesAttractionLR,
+            ParticlesAttractionLR = ParticlesAttractionLR,
             #endregion
             #region Pseudo Mesh
             #region Positions
-            aJob_WorldPositionsL = aJob_WorldPositionsL,
-            aJob_WorldPositionsR = aJob_WorldPositionsR,
+            WorldPositionsL = WorldPositionsL,
+            WorldPositionsR = WorldPositionsR,
             #endregion
             #region Indices
-            aJob_PseudoMeshIndicesL = aJob_PseudoMeshIndicesL,
-            aJob_PseudoMeshIndicesR = aJob_PseudoMeshIndicesR,
-            aJob_IndexStepSizes = aJob_IndexStepSizes,
-            aJob_IndexStepsSizeIndex = 0,
+            PseudoMeshIndicesL = PseudoMeshIndicesL,
+            PseudoMeshIndicesR = PseudoMeshIndicesR,
+            IndexStepSizes = IndexStepSizes,
+            IndexStepsSizeIndex = 0,
             #endregion
             #endregion
             #region Color
-            aJob_ColorLerp = ColorLerp,
+            UseDebugColors = UseDebugColors == true ? 1 : 0,
+            BaseColor = BaseColor,
+            ColorLerp = ColorLerp,
+            Alpha = 0f,
             #endregion
             #region Size
-            aJob_ParticleSizeMinMax = ParticleSizeMinMax,
-            aJob_DistanceForMinSize = DistanceForMinSize,
-            aJob_SizeLerp = SizeLerp,
+            ParticleSizeMinMax = ParticleSizeMinMax,
+            DistanceForMinSize = DistanceForMinSize,
+            SizeLerp = SizeLerp,
             #endregion
         };
         #endregion
@@ -486,7 +496,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update World Positions in Neutral Array for Attraction Job to Read
                 for (int i = 0; i < positionJobL.cwp_WorldPositions.Length; i++)
                 {
-                    attractionJob.aJob_WorldPositionsL[i] = positionJobL.cwp_WorldPositions[i];
+                    attractJob.WorldPositionsL[i] = positionJobL.cwp_WorldPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
@@ -506,7 +516,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update World Positions in Neutral Array for Attraction Job to Read
                 for (int i = 0; i < positionJobR.cwp_WorldPositions.Length; i++)
                 {
-                    attractionJob.aJob_WorldPositionsR[i] = positionJobR.cwp_WorldPositions[i];
+                    attractJob.WorldPositionsR[i] = positionJobR.cwp_WorldPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
@@ -522,7 +532,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Attraction Job
                 attractionJobHandle.Complete();
                 UpdateAttractionJob();
-                attractionJobHandle = attractionJob.ScheduleBatch(particleSystem, 1024);
+                attractionJobHandle = attractJob.ScheduleBatch(particleSystem, 1024);
                 #endregion
             }
             UpdateParticleMaterialAndHandVisual();
@@ -538,47 +548,90 @@ public class TheOtherFactor : MonoBehaviour
     private void UpdateAttractionJob()
     {
         #region Attraction
-        attractionJob.aJob_AttractionStrength =  AttractionStrength;
-        attractionJob.aJob_AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength; 
+        attractJob.AttractionStrength =  AttractionStrength;
+        attractJob.AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength; 
         #endregion
         #region Velocity
-        attractionJob.aJob_VelocityLerp = VelocityLerp;
+        attractJob.VelocityLerp = VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
         UpdateParticlesAttractionLR();
         #endregion
         #region Pseudo Mesh
         #region Indices
-        attractionJob.aJob_IndexStepsSizeIndex = attractionJob.aJob_IndexStepsSizeIndex < attractionJob.aJob_IndexStepSizes.Length ? attractionJob.aJob_IndexStepsSizeIndex + 1 : 0;
+        attractJob.IndexStepsSizeIndex = attractJob.IndexStepsSizeIndex < attractJob.IndexStepSizes.Length ? attractJob.IndexStepsSizeIndex + 1 : 0;
         #endregion
         #endregion
         #region Color
-        attractionJob.aJob_ColorLerp = ColorLerp;
+        #region Update Base Color
+        // Use Time.time multiplied by changeSpeed to get a value that increases over time
+        // The sine function will oscillate this value between -1 and 1
+        float sineValue = Mathf.Sin(Time.time * ColorTimeGradientUpdateSpeed);
+
+        // Map the sine value to a 0-1 range
+        float gradientTime = (sineValue + 1) / 2;
+
+        // Set the base color based on the current gradientTime and the gradient
+        BaseColor = BaseColorTimeGradient.Evaluate(gradientTime);
+        #endregion
+        attractJob.UseDebugColors = UseDebugColors == true ? 1 : 0;
+        attractJob.BaseColor = BaseColor;
+        attractJob.ColorLerp = ColorLerp;
+        #region Heartbeat Alpha
+        // Time factor adjusted for speed
+        float timeFactor = Time.time * HeartbeatSpeed;
+
+        // Calculate the phase of the cycle [0, 1]
+        float cyclePhase = timeFactor - Mathf.Floor(timeFactor);
+
+        // Define phases for "lub", "dub", and pause
+        float lubPhase = 0.2f; // Duration of the first beat
+        float gapPhase = 0.05f; // Short gap between "lub" and "dub"
+        float dubPhase = 0.2f; // Duration of the second beat
+
+        // Calculate alpha based on the phase
+        float alpha;
+        if (cyclePhase <= lubPhase) // "Lub" beat
+        {
+            alpha = Mathf.Sin(cyclePhase / lubPhase * Mathf.PI) * AlphaMinMax.y;
+        }
+        else if (cyclePhase <= lubPhase + gapPhase + dubPhase) // "Dub" beat
+        {
+            alpha = Mathf.Sin((cyclePhase - lubPhase - gapPhase) / dubPhase * Mathf.PI) * AlphaMinMax.y * 0.8f; // Slightly less intense than "lub"
+        }
+        else // Pause
+        {
+            alpha = AlphaMinMax.x;
+        }
+
+        // Ensure alpha stays within bounds [0, 1]
+        attractJob.Alpha = UseHeartbeat ? Mathf.Clamp(alpha, 0, 1) : AlphaMinMax.y;
+        #endregion
         #endregion
         #region Size
-        attractionJob.aJob_ParticleSizeMinMax = ParticleSizeMinMax;
-        attractionJob.aJob_DistanceForMinSize = DistanceForMinSize;
-        attractionJob.aJob_SizeLerp = SizeLerp;
+        attractJob.ParticleSizeMinMax = ParticleSizeMinMax;
+        attractJob.DistanceForMinSize = DistanceForMinSize;
+        attractJob.SizeLerp = SizeLerp;
         #endregion
     }
     private void UpdateParticlesAttractionLR()
     {
         Vector2 attractionVector = Vector2.one;
 
-        for (int i = 0; i < attractionJob.aJob_ParticlesAttractionLR.Length; i++)
+        for (int i = 0; i < attractJob.ParticlesAttractionLR.Length; i++)
         {
-            if (i < attractionJob.aJob_ParticlesAttractionLR.Length / 2)
+            if (i < attractJob.ParticlesAttractionLR.Length / 2)
             {
                 attractionVector.x = ParticlesAttractionGroup1.x;
-                attractionVector.y = ParticlesAttractionGroup1.y * aJob_PerParticleScaling[i];
+                attractionVector.y = ParticlesAttractionGroup1.y * PerParticleScaling[i];
             }
             else
             {
-                attractionVector.x = ParticlesAttractionGroup2.x * aJob_PerParticleScaling[i];
+                attractionVector.x = ParticlesAttractionGroup2.x * PerParticleScaling[i];
                 attractionVector.y = ParticlesAttractionGroup2.y;
             }
              
-            attractionJob.aJob_ParticlesAttractionLR[i] = attractionVector;
+            attractJob.ParticlesAttractionLR[i] = attractionVector;
         }
     }
     #endregion
@@ -594,34 +647,37 @@ public class TheOtherFactor : MonoBehaviour
     {
         #region Job Variables
         #region Attraction
-        [ReadOnly] public float aJob_AttractionStrength;
-        [ReadOnly] public float aJob_AttractionExponentDivisor;
+        [ReadOnly] public float AttractionStrength;
+        [ReadOnly] public float AttractionExponentDivisor;
         #endregion
         #region Veloctiy
-        [ReadOnly] public float aJob_VelocityLerp;
+        [ReadOnly] public float VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
-        [ReadOnly] public NativeArray<Vector2> aJob_ParticlesAttractionLR;
+        [ReadOnly] public NativeArray<Vector2> ParticlesAttractionLR;
         #endregion
         #region Pseudo Mesh
         #region Positions
-        [ReadOnly] public NativeArray<Vector3> aJob_WorldPositionsL;
-        [ReadOnly] public NativeArray<Vector3> aJob_WorldPositionsR;
+        [ReadOnly] public NativeArray<Vector3> WorldPositionsL;
+        [ReadOnly] public NativeArray<Vector3> WorldPositionsR;
         #endregion
         #region Indices
-        public NativeArray<int> aJob_PseudoMeshIndicesL;
-        public NativeArray<int> aJob_PseudoMeshIndicesR;
-        [ReadOnly] public NativeArray<int> aJob_IndexStepSizes;
-        [ReadOnly] public int aJob_IndexStepsSizeIndex;
+        public NativeArray<int> PseudoMeshIndicesL;
+        public NativeArray<int> PseudoMeshIndicesR;
+        [ReadOnly] public NativeArray<int> IndexStepSizes;
+        [ReadOnly] public int IndexStepsSizeIndex;
         #endregion
         #endregion
         #region Color
-        [ReadOnly] public float aJob_ColorLerp;
+        [ReadOnly] public int UseDebugColors;
+        [ReadOnly] public Color BaseColor;
+        [ReadOnly] public float ColorLerp;
+        [ReadOnly] public float Alpha;
         #endregion
         #region Size
-        [ReadOnly] public Vector2 aJob_ParticleSizeMinMax;
-        [ReadOnly] public float aJob_DistanceForMinSize;
-        [ReadOnly] public float aJob_SizeLerp;
+        [ReadOnly] public Vector2 ParticleSizeMinMax;
+        [ReadOnly] public float DistanceForMinSize;
+        [ReadOnly] public float SizeLerp;
         #endregion
         #endregion
         public void Execute(ParticleSystemJobData particles, int startIndex, int count)
@@ -640,24 +696,24 @@ public class TheOtherFactor : MonoBehaviour
                 Vector3 particlePosition = positions[particleIndex];
 
                 #region Compute Attraction to Left Hand
-                int pseudoMeshPosIndexL = aJob_PseudoMeshIndicesL[particleIndex];
-                Vector3 worldPositionL = aJob_WorldPositionsL[pseudoMeshPosIndexL];
-                aJob_PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + aJob_IndexStepSizes[(particleIndex + aJob_IndexStepsSizeIndex) % aJob_WorldPositionsL.Length]) % aJob_WorldPositionsL.Length;
-                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, aJob_AttractionExponentDivisor, aJob_AttractionStrength);
-                velocityL *= aJob_ParticlesAttractionLR[particleIndex].x;
+                int pseudoMeshPosIndexL = PseudoMeshIndicesL[particleIndex];
+                Vector3 worldPositionL = WorldPositionsL[pseudoMeshPosIndexL];
+                PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % WorldPositionsL.Length]) % WorldPositionsL.Length;
+                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, AttractionExponentDivisor, AttractionStrength);
+                velocityL *= ParticlesAttractionLR[particleIndex].x;
                 #endregion
                 #region Compute Attraction to Right Hand
-                int pseudoMeshPosIndexR = aJob_PseudoMeshIndicesR[particleIndex];
-                Vector3 worldPositionR = aJob_WorldPositionsR[pseudoMeshPosIndexR];
-                aJob_PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + aJob_IndexStepSizes[(particleIndex + aJob_IndexStepsSizeIndex) % aJob_WorldPositionsR.Length]) % aJob_WorldPositionsR.Length;
-                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, aJob_AttractionExponentDivisor, aJob_AttractionStrength);
-                velocityR *= aJob_ParticlesAttractionLR[particleIndex].y;
+                int pseudoMeshPosIndexR = PseudoMeshIndicesR[particleIndex];
+                Vector3 worldPositionR = WorldPositionsR[pseudoMeshPosIndexR];
+                PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % WorldPositionsR.Length]) % WorldPositionsR.Length;
+                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, AttractionExponentDivisor, AttractionStrength);
+                velocityR *= ParticlesAttractionLR[particleIndex].y;
                 #endregion
 
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
                 Vector3 velocity = velocityL + velocityR;
-                velocity = math.lerp(velocities[particleIndex], velocity, aJob_VelocityLerp);
+                velocity = math.lerp(velocities[particleIndex], velocity, VelocityLerp);
                 velocities[particleIndex] = velocity;
                 #endregion
                 #region Size
@@ -666,21 +722,19 @@ public class TheOtherFactor : MonoBehaviour
                 float leastDistance = math.min(distanceL, distanceR); 
 
                 // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
-                float normalizedDistance = math.clamp(leastDistance / aJob_DistanceForMinSize, 0f, 1f);
+                float normalizedDistance = math.clamp(leastDistance / DistanceForMinSize, 0f, 1f);
                 float inverseNormalizedDistance = 1 - normalizedDistance;
-                float targetSize = math.lerp(aJob_ParticleSizeMinMax.x, aJob_ParticleSizeMinMax.y, inverseNormalizedDistance);
+                float targetSize = math.lerp(ParticleSizeMinMax.x, ParticleSizeMinMax.y, inverseNormalizedDistance);
 
-                sizes[i] = math.lerp(sizes[i], targetSize, aJob_SizeLerp);
+                sizes[i] = math.lerp(sizes[i], targetSize, SizeLerp);
                 #endregion
                 #region Color
                 // Compute particle color
-                Color color = ComputeParticleColor(velocity);
-                colors[particleIndex] = Color.Lerp(colors[particleIndex], color, aJob_ColorLerp);
-                // For Debugging, it can make sense to color the two groups of particles in distinct colors
-                //colors[particleIndex] = particleIndex < particles.count / 2 ? Color.green : Color.red;
-                //Color color = Color.white;
-                //color.a = math.lerp(1, 0, inverseNormalizedDistance);
-                //colors[particleIndex] = color;
+                Color velocityColor = ComputeParticleColor(velocity, BaseColor);
+                Color debugColor = particleIndex < particles.count / 2 ? Color.green : Color.red;
+                Color color = UseDebugColors == 0 ? velocityColor : debugColor;
+                color.a = Alpha;
+                colors[particleIndex] = Color.Lerp(colors[particleIndex], color, ColorLerp);
                 #endregion
                 #endregion
             }
@@ -709,12 +763,17 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Compute Particle Color
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Color ComputeParticleColor(Vector3 velocity)
+        private static Color ComputeParticleColor(Vector3 velocity, Vector4 colorNoise)
         {
-            Vector3 normalizedVelocity = math.normalize(velocity);
+            float minColorValue = .1f;
+
+            // Scale color noise by the non-normalized velocity components
+            float rNoise = math.lerp(velocity.x, colorNoise.x, colorNoise.w) + minColorValue;
+            float gNoise = math.lerp(velocity.y, colorNoise.y, colorNoise.w) + minColorValue;
+            float bNoise = math.lerp(velocity.z, colorNoise.z, colorNoise.w) + minColorValue;
 
             // Create the final color
-            Color finalColor = new Color(normalizedVelocity.x, normalizedVelocity.y, normalizedVelocity.z, 1);
+            Color finalColor = new Color(rNoise, gNoise, bNoise, 1);
 
             return finalColor;
         }
