@@ -1,16 +1,13 @@
-using UnityEngine;
+using Oculus.Interaction;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Random = Unity.Mathematics.Random;
-using Unity.Burst;
-using System.Collections;
-using Oculus.Interaction;
+using UnityEngine;
 using UnityEngine.ParticleSystemJobs;
-using System.Threading.Tasks;
-using System;
-using System.Linq;
 
 public class TheOtherFactor : MonoBehaviour
 {
@@ -337,16 +334,16 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Pseudo Mesh
         #region Positions
-        NativeArray<Vector3> WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        NativeArray<Vector3> WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> MeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> MeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
         #region Indices
-        NativeArray<int> PseudoMeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
-        NativeArray<int> PseudoMeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> MeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> MeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
         for (int i = 0; i < totalParticles; i++)
         {
-            PseudoMeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
-            PseudoMeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            MeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            MeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
         }
         NativeArray<int> IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
         for (int i = 0; i < totalParticles; i++)
@@ -370,12 +367,12 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Pseudo Mesh
             #region Positions
-            WorldPositionsL = WorldPositionsL,
-            WorldPositionsR = WorldPositionsR,
+            MeshPositionsL = MeshPositionsL,
+            MeshPositionsR = MeshPositionsR,
             #endregion
             #region Indices
-            PseudoMeshIndicesL = PseudoMeshIndicesL,
-            PseudoMeshIndicesR = PseudoMeshIndicesR,
+            MeshIndicesL = MeshIndicesL,
+            MeshIndicesR = MeshIndicesR,
             IndexStepSizes = IndexStepSizes,
             IndexStepsSizeIndex = 0,
             #endregion
@@ -427,7 +424,7 @@ public class TheOtherFactor : MonoBehaviour
             cwp_JointToParticleMap = cwp_JointToParticleMapL,
             #endregion
             #region Pseudo Mesh
-            cwp_PseudoMeshPositions = cwp_PseudoMeshParticlePositionsL,
+            cwp_MeshPositions = cwp_PseudoMeshParticlePositionsL,
             cwp_WorldPositions = cwp_WorldPositionsL,
             #endregion
             #region Position Offsets
@@ -462,7 +459,7 @@ public class TheOtherFactor : MonoBehaviour
             cwp_JointToParticleMap = cwp_JointToParticleMapR,
             #endregion
             #region Pseudo Mesh
-            cwp_PseudoMeshPositions = cwp_PseudoMeshParticlePositionsR,
+            cwp_MeshPositions = cwp_PseudoMeshParticlePositionsR,
             cwp_WorldPositions = cwp_WorldPositionsR,
             #endregion
             #region Position Offsets
@@ -496,7 +493,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update World Positions in Neutral Array for Attraction Job to Read
                 for (int i = 0; i < positionJobL.cwp_WorldPositions.Length; i++)
                 {
-                    attractJob.WorldPositionsL[i] = positionJobL.cwp_WorldPositions[i];
+                    attractJob.MeshPositionsL[i] = positionJobL.cwp_WorldPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
@@ -516,7 +513,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update World Positions in Neutral Array for Attraction Job to Read
                 for (int i = 0; i < positionJobR.cwp_WorldPositions.Length; i++)
                 {
-                    attractJob.WorldPositionsR[i] = positionJobR.cwp_WorldPositions[i];
+                    attractJob.MeshPositionsR[i] = positionJobR.cwp_WorldPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
@@ -577,7 +574,8 @@ public class TheOtherFactor : MonoBehaviour
         attractJob.UseDebugColors = UseDebugColors == true ? 1 : 0;
         attractJob.BaseColor = BaseColor;
         attractJob.ColorLerp = ColorLerp;
-        #region Heartbeat Alpha
+        #region Alpha
+        #region Heartbeat
         // Time factor adjusted for speed
         float timeFactor = Time.time * HeartbeatSpeed;
 
@@ -603,9 +601,8 @@ public class TheOtherFactor : MonoBehaviour
         {
             alpha = AlphaMinMax.x;
         }
-
-        // Ensure alpha stays within bounds [0, 1]
-        attractJob.Alpha = UseHeartbeat ? Mathf.Clamp(alpha, 0, 1) : AlphaMinMax.y;
+        #endregion
+        attractJob.Alpha = UseHeartbeat == true ? Mathf.Clamp(alpha, 0, 1) : AlphaMinMax.y;
         #endregion
         #endregion
         #region Size
@@ -658,12 +655,12 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Pseudo Mesh
         #region Positions
-        [ReadOnly] public NativeArray<Vector3> WorldPositionsL;
-        [ReadOnly] public NativeArray<Vector3> WorldPositionsR;
+        [ReadOnly] public NativeArray<Vector3> MeshPositionsL;
+        [ReadOnly] public NativeArray<Vector3> MeshPositionsR;
         #endregion
         #region Indices
-        public NativeArray<int> PseudoMeshIndicesL;
-        public NativeArray<int> PseudoMeshIndicesR;
+        public NativeArray<int> MeshIndicesL;
+        public NativeArray<int> MeshIndicesR;
         [ReadOnly] public NativeArray<int> IndexStepSizes;
         [ReadOnly] public int IndexStepsSizeIndex;
         #endregion
@@ -693,48 +690,32 @@ public class TheOtherFactor : MonoBehaviour
             for (int i = startIndex; i < endIndex; i++)
             {
                 int particleIndex = i;
-                Vector3 particlePosition = positions[particleIndex];
+                Vector3 particlePos = positions[particleIndex];
 
                 #region Compute Attraction to Left Hand
-                int pseudoMeshPosIndexL = PseudoMeshIndicesL[particleIndex];
-                Vector3 worldPositionL = WorldPositionsL[pseudoMeshPosIndexL];
-                PseudoMeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % WorldPositionsL.Length]) % WorldPositionsL.Length;
-                Vector3 velocityL = CalculateAttractionVelocity(worldPositionL, particlePosition, AttractionExponentDivisor, AttractionStrength);
+                int pseudoMeshPosIndexL = MeshIndicesL[particleIndex];
+                Vector3 meshPosL = MeshPositionsL[pseudoMeshPosIndexL];
+                MeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsL.Length]) % MeshPositionsL.Length;
+                Vector3 velocityL = CalculateAttractionVelocity(meshPosL, particlePos, AttractionExponentDivisor, AttractionStrength);
                 velocityL *= ParticlesAttractionLR[particleIndex].x;
                 #endregion
                 #region Compute Attraction to Right Hand
-                int pseudoMeshPosIndexR = PseudoMeshIndicesR[particleIndex];
-                Vector3 worldPositionR = WorldPositionsR[pseudoMeshPosIndexR];
-                PseudoMeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % WorldPositionsR.Length]) % WorldPositionsR.Length;
-                Vector3 velocityR = CalculateAttractionVelocity(worldPositionR, particlePosition, AttractionExponentDivisor, AttractionStrength);
+                int pseudoMeshPosIndexR = MeshIndicesR[particleIndex];
+                Vector3 meshPosR = MeshPositionsR[pseudoMeshPosIndexR];
+                MeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsR.Length]) % MeshPositionsR.Length;
+                Vector3 velocityR = CalculateAttractionVelocity(meshPosR, particlePos, AttractionExponentDivisor, AttractionStrength);
                 velocityR *= ParticlesAttractionLR[particleIndex].y;
                 #endregion
 
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
-                Vector3 velocity = velocityL + velocityR;
-                velocity = math.lerp(velocities[particleIndex], velocity, VelocityLerp);
-                velocities[particleIndex] = velocity;
+                velocities[particleIndex] = math.lerp(velocities[particleIndex], velocityL + velocityR, VelocityLerp);
                 #endregion
                 #region Size
-                float distanceL = math.length(worldPositionL - particlePosition);
-                float distanceR = math.length(worldPositionR - particlePosition);
-                float leastDistance = math.min(distanceL, distanceR); 
-
-                // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
-                float normalizedDistance = math.clamp(leastDistance / DistanceForMinSize, 0f, 1f);
-                float inverseNormalizedDistance = 1 - normalizedDistance;
-                float targetSize = math.lerp(ParticleSizeMinMax.x, ParticleSizeMinMax.y, inverseNormalizedDistance);
-
-                sizes[i] = math.lerp(sizes[i], targetSize, SizeLerp);
+                sizes[i] =  ComputeParticleSize(particlePos, meshPosL, meshPosR, DistanceForMinSize, ParticleSizeMinMax, SizeLerp, sizes[particleIndex]);// math.lerp(sizes[i], targetSize, SizeLerp);
                 #endregion
                 #region Color
-                // Compute particle color
-                Color velocityColor = ComputeParticleColor(velocity, BaseColor);
-                Color debugColor = particleIndex < particles.count / 2 ? Color.green : Color.red;
-                Color color = UseDebugColors == 0 ? velocityColor : debugColor;
-                color.a = Alpha;
-                colors[particleIndex] = Color.Lerp(colors[particleIndex], color, ColorLerp);
+                colors[particleIndex] = ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex < particles.count / 2 ? 1 : 2, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
                 #endregion
                 #endregion
             }
@@ -763,19 +744,44 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Compute Particle Color
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Color ComputeParticleColor(Vector3 velocity, Vector4 colorNoise)
+        private static Color ComputeParticleColor(Vector3 velocity, Vector4 baseColor, int particleGroup, int useDebugColors, float alpha, float colorLerp, Color currentColor)
         {
+            Color debugColor = particleGroup == 1 ? Color.green : Color.red;
+
             float minColorValue = .1f;
 
             // Scale color noise by the non-normalized velocity components
-            float rNoise = math.lerp(velocity.x, colorNoise.x, colorNoise.w) + minColorValue;
-            float gNoise = math.lerp(velocity.y, colorNoise.y, colorNoise.w) + minColorValue;
-            float bNoise = math.lerp(velocity.z, colorNoise.z, colorNoise.w) + minColorValue;
+            float rNoise = math.lerp(velocity.x, baseColor.x, baseColor.w) + minColorValue;
+            float gNoise = math.lerp(velocity.y, baseColor.y, baseColor.w) + minColorValue;
+            float bNoise = math.lerp(velocity.z, baseColor.z, baseColor.w) + minColorValue;
 
             // Create the final color
-            Color finalColor = new Color(rNoise, gNoise, bNoise, 1);
+            Color velocityColor = new Color(rNoise, gNoise, bNoise, 1);
+
+            Color combinedColor = useDebugColors == 0 ? velocityColor : debugColor;
+            combinedColor.a = alpha;
+
+            Color finalColor = Color.Lerp(currentColor, combinedColor, colorLerp);
 
             return finalColor;
+        }
+        #endregion
+        #region Compute Particle Size
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private static float ComputeParticleSize(Vector3 particlePos, Vector3 meshPosL, Vector3 meshPosR, float distanceForMinSize, Vector2 particleSizeMinMax, float sizeLerp, float currentSize)
+        {
+            float distanceL = math.length(meshPosL - particlePos);
+            float distanceR = math.length(meshPosR - particlePos);
+            float leastDistance = math.min(distanceL, distanceR);
+
+            // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
+            float normalizedDistance = math.clamp(leastDistance / distanceForMinSize, 0f, 1f);
+            float inverseNormalizedDistance = 1 - normalizedDistance;
+            float targetSize = math.lerp(particleSizeMinMax.x, particleSizeMinMax.y, inverseNormalizedDistance);
+
+            float finalSize = math.lerp(currentSize, targetSize, sizeLerp);
+
+            return finalSize;
         }
         #endregion
         #endregion
@@ -800,7 +806,7 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Pseudo Mesh
         // Pseudo mesh positions and output array for world positions of particles
-        [ReadOnly] public NativeArray<Vector3> cwp_PseudoMeshPositions;
+        [ReadOnly] public NativeArray<Vector3> cwp_MeshPositions;
         public NativeArray<Vector3> cwp_WorldPositions; // Output array
         #endregion
         #region Position Offset
@@ -814,7 +820,7 @@ public class TheOtherFactor : MonoBehaviour
             float positionOffset = cwp_PositionOffsets[(index + cwp_PositionOffsetsIndex) % cwp_PositionOffsets.Length];
 
             // Get the relative position, joint index, and joint data for the current particle
-            Vector3 relativePosition = cwp_PseudoMeshPositions[index];
+            Vector3 relativePosition = cwp_MeshPositions[index];
             int jointIndex = cwp_JointToParticleMap[index];
             Vector3 jointPosition = cwp_JointPositions[jointIndex];
             Quaternion jointRotation = cwp_JointRotations[jointIndex];

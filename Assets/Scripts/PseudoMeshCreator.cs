@@ -157,54 +157,54 @@ public class PseudoMeshCreator : MonoBehaviour
     public void InitializeHandJointsFromHandVisual(HandVisual handVisual, string handType)
     {
         IList<Transform> jointTransforms = handVisual.Joints;
-        // Create a set of joints to exclude (like wrists and forearms) to focus on finger joints
-        HashSet<string> excludedJoints = new HashSet<string> { "b_l_wrist", "b_r_wrist", "b_l_forearm_stub", "b_r_forearm_stub" };
-        List<Transform> fingertips = new List<Transform>(); // List to store fingertip joints
 
-        Action<List<Transform>> processHandJoints = (handJoints) =>
+        // Clear existing hand joints to prepare for updated data
+        List<Transform> handJoints = handType == "right" ? RightHandJoints : LeftHandJoints;
+        handJoints.Clear();
+
+        // Helper function to find a joint by name
+        Transform FindJoint(string jointName)
         {
-            handJoints.Clear(); // Clear existing hand joints to prepare for updated data
-
-            // Iterate over all joints and filter based on naming conventions and relevance
-            foreach (Transform joint in jointTransforms)
+            var joint = jointTransforms.FirstOrDefault(joint => joint.name.Equals(jointName, StringComparison.OrdinalIgnoreCase));
+            if (joint == null)
             {
-                // Exclude joints like wrists and forearms
-                if (!excludedJoints.Contains(joint.name))
-                {
-                    // Identify and add fingertip joints to a separate list for special handling
-                    if (joint.name.Contains("_finger_tip_marker"))
-                    {
-                        fingertips.Add(joint);
-                    }
-                    else
-                    {
-                        handJoints.Add(joint); // Add non-fingertip joints to the main list
-                    }
-                }
+                Debug.LogWarning($"Joint {jointName} not found.");
             }
-
-            // Process each fingertip and insert it back into the main joint list at the correct position
-            foreach (var fingertip in fingertips)
+            else
             {
-                string fingerBaseName = fingertip.name.Substring(0, fingertip.name.IndexOf("_finger_tip_marker"));
-                // Find the index of the last joint of the same finger
-                int lastJointIndex = handJoints.FindLastIndex(j => j.name.StartsWith(fingerBaseName));
-                // Insert the fingertip right after the last joint of its corresponding finger
-                if (lastJointIndex >= 0)
-                {
-                    handJoints.Insert(lastJointIndex + 1, fingertip);
-                }
+                Debug.Log($"Joint {jointName} found.");
             }
-        };
-
-        // Process hand joints based on the specified hand type (left or right)
-        if (handType == "right")
-        {
-            processHandJoints(RightHandJoints);
+            return joint;
         }
-        else if (handType == "left")
+
+        // Define the order of joints for each finger
+        string[] thumbOrder = { "0", "1", "3", "2" };
+        string[] fingerOrder = { "1", "3", "2" };
+
+        string handTypeShort = handType == "right" ? "r" : "l";
+
+        // Process thumb joints
+        foreach (var index in thumbOrder)
         {
-            processHandJoints(LeftHandJoints);
+            var joint = FindJoint($"b_{handTypeShort}_thumb{index}");
+            if (joint != null) handJoints.Add(joint);
+        }
+
+        // Process other fingers
+        string[] fingers = { "index", "middle", "ring", "pinky" };
+        foreach (var finger in fingers)
+        {
+            foreach (var index in fingerOrder)
+            {
+                var joint = FindJoint($"b_{handTypeShort}_{finger}{index}");
+                if (joint != null) handJoints.Add(joint);
+            }
+            // Special case for pinky0
+            if (finger == "pinky")
+            {
+                var pinky0 = FindJoint($"b_{handTypeShort}_pinky0");
+                if (pinky0 != null) handJoints.Add(pinky0);
+            }
         }
     }
     #endregion
@@ -519,8 +519,7 @@ public class PseudoMeshCreator : MonoBehaviour
         GenerateMeshTraversalPath(LeftHandJoints, LeftHandJointIndices, LeftHandRelativePositions, JointOnMeshMapL);
         GenerateMeshTraversalPath(RightHandJoints, RightHandJointIndices, RightHandRelativePositions, JointOnMeshMapR);
     }
-    #endregion
-    
+    #endregion   
     #region Calculate Percentage Of Entries
     public List<float> CalculatePercentageOfEntries(List<int> inputList)
     {
