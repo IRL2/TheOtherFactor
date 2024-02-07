@@ -90,10 +90,10 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region World Positions Jobs
     #region Job Handle
-    private JobHandle positionJobHandleL;
+    private JobHandle updateMeshJobHandleL;
     private UpdateMeshJob updateMeshJobL;
 
-    private JobHandle positionJobHandleR;
+    private JobHandle updateMeshJobHandleR;
     private UpdateMeshJob updateMeshJobR;
     #endregion
     #region Position Offsets
@@ -349,6 +349,10 @@ public class TheOtherFactor : MonoBehaviour
             IndexStepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
         }
         #endregion
+        #region Joint Distance Moved
+        NativeArray<float> a_JointDistanceMovedL = new NativeArray<float>(totalParticles, Allocator.Persistent);
+        NativeArray<float> a_JointDistanceMovedR = new NativeArray<float>(totalParticles, Allocator.Persistent);
+        #endregion
         #endregion
         #endregion
         attractJob = new AttractionJob
@@ -373,6 +377,10 @@ public class TheOtherFactor : MonoBehaviour
             MeshIndicesR = MeshIndicesR,
             IndexStepSizes = IndexStepSizes,
             IndexStepsSizeIndex = 0,
+            #endregion
+            #region Joint Distance Moved
+            JointDistanceMovedL = a_JointDistanceMovedL,
+            JointDistanceMovedR = a_JointDistanceMovedR,
             #endregion
             #endregion
             #region Color
@@ -399,12 +407,14 @@ public class TheOtherFactor : MonoBehaviour
         #region Update Mesh Job L
         #region Joints
         NativeArray<Vector3> JointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> PrevJointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
         NativeArray<quaternion> JointRotationsL = new NativeArray<quaternion>(LeftHandJoints.Count, Allocator.Persistent);
         NativeArray<int> JointToParticleMapL = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < LeftHandJointIndices.Count; i++)
         {
             JointToParticleMapL[i] = LeftHandJointIndices[i];
         }
+        NativeArray<float> JointDistanceMovedL = new NativeArray<float>(totalParticles, Allocator.Persistent);
         #endregion
         #region Pseudo Mesh
         NativeArray<Vector3> BaseMeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
@@ -418,8 +428,10 @@ public class TheOtherFactor : MonoBehaviour
         {
             #region Joints
             JointPositions = JointPositionsL,
+            PrevJointPositions = PrevJointPositionsL,
             JointRotations = JointRotationsL,
             JointToParticleMap = JointToParticleMapL,
+            JointDistanceMoved = JointDistanceMovedL,
             #endregion
             #region Pseudo Mesh
             BaseMeshPositions = BaseMeshPositionsL,
@@ -434,12 +446,14 @@ public class TheOtherFactor : MonoBehaviour
         #region Update Mesh Job R
         #region Joints
         NativeArray<Vector3> JointPositionsR = new NativeArray<Vector3>(RightHandJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> PrevJointPositionsR = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
         NativeArray<quaternion> JointRotationsR = new NativeArray<quaternion>(RightHandJoints.Count, Allocator.Persistent);
         NativeArray<int> JointToParticleMapR = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < RightHandJointIndices.Count; i++)
         {
             JointToParticleMapR[i] = RightHandJointIndices[i];
         }
+        NativeArray<float> JointDistanceMovedR = new NativeArray<float>(totalParticles, Allocator.Persistent);
         #endregion
         #region Pseudo Mesh
         NativeArray<Vector3> BaseMeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
@@ -453,8 +467,10 @@ public class TheOtherFactor : MonoBehaviour
         {
             #region Joints
             JointPositions = JointPositionsR,
+            PrevJointPositions = PrevJointPositionsR,
             JointRotations = JointRotationsR,
             JointToParticleMap = JointToParticleMapR,
+            JointDistanceMoved = JointDistanceMovedR,
             #endregion
             #region Pseudo Mesh
             BaseMeshPositions = BaseMeshPositionsR,
@@ -473,14 +489,18 @@ public class TheOtherFactor : MonoBehaviour
     #region Runtime Updates
     void OnParticleUpdateJobScheduled()
     {
-        if (RunJobs && attractionJobHandle.IsCompleted && positionJobHandleL.IsCompleted && positionJobHandleR.IsCompleted)
+        if (RunJobs && attractionJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted)
         {
+            #region Complete Jobs
+            updateMeshJobHandleL.Complete();
+            updateMeshJobHandleR.Complete();
+            attractionJobHandle.Complete();
+            #endregion
             if (isEvenFrame)
             {
-                #region World Position Jobs
+                #region Update Mesh Jobs
                 MeshPositionOffsetsIndex = MeshPositionOffsetsIndex < updateMeshJobL.MeshPositionOffsets.Length ? MeshPositionOffsetsIndex + 1 : 0;
-                #region Schedule PositionL Job
-                positionJobHandleL.Complete();
+                #region Update Mesh Job L
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
                 {
@@ -488,19 +508,18 @@ public class TheOtherFactor : MonoBehaviour
                     updateMeshJobL.JointRotations[i] = LeftHandJoints[i].rotation;                   
                 }
                 #endregion
-                #region Update World Positions in Neutral Array for Attraction Job to Read
-                for (int i = 0; i < updateMeshJobL.DynamicMeshPositions.Length; i++)
-                {
-                    attractJob.MeshPositionsL[i] = updateMeshJobL.DynamicMeshPositions[i];
-                }
+                #region Update Joint Distance Moved in Attraction Job
+                attractJob.JointDistanceMovedL = updateMeshJobL.JointDistanceMoved;
+                #endregion
+                #region Update Mesh Positions in Attraction Job
+                attractJob.MeshPositionsL = updateMeshJobL.DynamicMeshPositions;
                 #endregion
                 #region Update PositionOffsetsIndex
                 updateMeshJobL.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
-                if (updateMeshJobL.JointPositions.Length > 0) positionJobHandleL = updateMeshJobL.Schedule(particleSystem.particleCount / 2, 1024);
+                if (updateMeshJobL.JointPositions.Length > 0) updateMeshJobHandleL = updateMeshJobL.Schedule(particleSystem.particleCount / 2, 1024);
                 #endregion
-                #region Schedule PositionR Job
-                positionJobHandleR.Complete();
+                #region Update Mesh Job R
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobR.JointPositions.Length; i++)
                 {
@@ -508,26 +527,32 @@ public class TheOtherFactor : MonoBehaviour
                     updateMeshJobR.JointRotations[i] = RightHandJoints[i].rotation;
                 }
                 #endregion
-                #region Update World Positions in Neutral Array for Attraction Job to Read
-                for (int i = 0; i < updateMeshJobR.DynamicMeshPositions.Length; i++)
-                {
-                    attractJob.MeshPositionsR[i] = updateMeshJobR.DynamicMeshPositions[i];
-                }
+                #region Update Joint Distance Moved
+                attractJob.JointDistanceMovedR = updateMeshJobR.JointDistanceMoved;
+                #endregion
+                #region Update Mesh Positions in Attraction Job
+                attractJob.MeshPositionsR = updateMeshJobR.DynamicMeshPositions;
                 #endregion
                 #region Update PositionOffsetsIndex
                 updateMeshJobR.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
-                if (updateMeshJobR.JointPositions.Length > 0) positionJobHandleR = updateMeshJobR.Schedule(particleSystem.particleCount / 2, 1024);
+                if (updateMeshJobR.JointPositions.Length > 0) updateMeshJobHandleR = updateMeshJobR.Schedule(particleSystem.particleCount / 2, 1024);
                 #endregion
                 #endregion
             }
             else
             { 
                 #region Attraction Job
-                attractionJobHandle.Complete();
                 UpdateAttractionJob();
                 attractionJobHandle = attractJob.ScheduleBatch(particleSystem, 1024);
+                #endregion
+                #region Update Previous Joint Positions in Update Mesh Job
+                for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
+                {
+                    updateMeshJobL.PrevJointPositions[i] = LeftHandJoints[i].position;
+                    updateMeshJobR.PrevJointPositions[i] = RightHandJoints[i].position;
+                }
                 #endregion
             }
             UpdateParticleMaterialAndHandVisual();
@@ -662,6 +687,10 @@ public class TheOtherFactor : MonoBehaviour
         [ReadOnly] public NativeArray<int> IndexStepSizes;
         [ReadOnly] public int IndexStepsSizeIndex;
         #endregion
+        #region Joint Distance Moved
+        [ReadOnly] public NativeArray<float> JointDistanceMovedL;
+        [ReadOnly] public NativeArray<float> JointDistanceMovedR;
+        #endregion
         #endregion
         #region Color
         [ReadOnly] public int UseDebugColors;
@@ -696,6 +725,7 @@ public class TheOtherFactor : MonoBehaviour
                 MeshIndicesL[particleIndex] = (pseudoMeshPosIndexL + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsL.Length]) % MeshPositionsL.Length;
                 Vector3 velocityL = CalculateAttractionVelocity(meshPosL, particlePos, AttractionExponentDivisor, AttractionStrength);
                 velocityL *= ParticlesAttractionLR[particleIndex].x;
+                velocityL *= math.max(.1f, math.min(JointDistanceMovedL[pseudoMeshPosIndexL] * 1000, 1));
                 #endregion
                 #region Compute Attraction to Right Hand
                 int pseudoMeshPosIndexR = MeshIndicesR[particleIndex];
@@ -703,6 +733,7 @@ public class TheOtherFactor : MonoBehaviour
                 MeshIndicesR[particleIndex] = (pseudoMeshPosIndexR + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsR.Length]) % MeshPositionsR.Length;
                 Vector3 velocityR = CalculateAttractionVelocity(meshPosR, particlePos, AttractionExponentDivisor, AttractionStrength);
                 velocityR *= ParticlesAttractionLR[particleIndex].y;
+                velocityR *= math.max(.1f, math.min(JointDistanceMovedR[pseudoMeshPosIndexR] * 1000, 1));
                 #endregion
 
                 #region Update Particle Velocity, Size and Color
@@ -799,8 +830,10 @@ public class TheOtherFactor : MonoBehaviour
         #region Joints
         // Read-only arrays for joint positions and rotations, and a map from joint to particle
         [ReadOnly] public NativeArray<Vector3> JointPositions;
+        [ReadOnly] public NativeArray<Vector3> PrevJointPositions;
         [ReadOnly] public NativeArray<quaternion> JointRotations;
         [ReadOnly] public NativeArray<int> JointToParticleMap;
+        public NativeArray<float> JointDistanceMoved;
         #endregion
         #region Pseudo Mesh
         // Pseudo mesh positions and output array for world positions of particles
@@ -821,10 +854,12 @@ public class TheOtherFactor : MonoBehaviour
             Vector3 baseMeshPosition = BaseMeshPositions[index];
             int jointIndex = JointToParticleMap[index];
             Vector3 jointPosition = JointPositions[jointIndex];
+            Vector3 prevJointPosition = PrevJointPositions[jointIndex];
             Quaternion jointRotation = JointRotations[jointIndex];
 
             // Compute the final world position for the particle and store it
             DynamicMeshPositions[index] = ComputeWorldPosition(jointPosition, jointRotation, baseMeshPosition, positionOffset);
+            JointDistanceMoved[index] = math.length(prevJointPosition - jointPosition);
         }
         #region Compute World Position
         // Inline method for computing world position of a particle
@@ -847,8 +882,8 @@ public class TheOtherFactor : MonoBehaviour
     {
         #region Complete Jobs
         attractionJobHandle.Complete();
-        positionJobHandleL.Complete();
-        positionJobHandleR.Complete();
+        updateMeshJobHandleL.Complete();
+        updateMeshJobHandleR.Complete();
         #endregion
     }
     #endregion
