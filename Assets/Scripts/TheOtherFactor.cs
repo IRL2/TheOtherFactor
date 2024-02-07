@@ -54,7 +54,7 @@ public class TheOtherFactor : MonoBehaviour
     // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
     [Header("Position Offsets")]
     [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
-    public Vector2 cwp_PositionOffsetMinMax = new Vector2(0f, .7f);
+    public Vector2 PositionOffsetMinMax = new Vector2(0f, .7f);
     #endregion
     #region Index Step Size
     [Header("Index Step Size")]
@@ -91,13 +91,13 @@ public class TheOtherFactor : MonoBehaviour
     #region World Positions Jobs
     #region Job Handle
     private JobHandle positionJobHandleL;
-    private ComputeWorldPositionJob positionJobL;
+    private UpdateMeshJob updateMeshJobL;
 
     private JobHandle positionJobHandleR;
-    private ComputeWorldPositionJob positionJobR;
+    private UpdateMeshJob updateMeshJobR;
     #endregion
     #region Position Offsets
-    private int cwp_PositionOffsetsIndex = 0;
+    private int MeshPositionOffsetsIndex = 0;
     #endregion
     #endregion
     #endregion
@@ -132,8 +132,6 @@ public class TheOtherFactor : MonoBehaviour
         public string jointName;
         public List<Vector3> relativePositions = new List<Vector3>();
     }
-    private List<JointData> JointOnMeshMap1 = new List<JointData>();
-    private List<JointData> JointOnMeshMap2 = new List<JointData>();
     #endregion
     #region Runtime "Pseudo Mesh"
     private List<Vector3> LeftHandRelativePositions = new List<Vector3>();
@@ -392,79 +390,79 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Position Jobs
         #region World Position Offsets
-        NativeArray<float> cwp_PositionOffsets = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<float> MeshPositionOffsets = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < ParticlesPerHand; i++)
         {
-            cwp_PositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(cwp_PositionOffsetMinMax.x, cwp_PositionOffsetMinMax.y));
+            MeshPositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(PositionOffsetMinMax.x, PositionOffsetMinMax.y));
         }
         #endregion
-        #region Position Job L
+        #region Update Mesh Job L
         #region Joints
-        NativeArray<Vector3> cwp_JointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
-        NativeArray<quaternion> cwp_JointRotationsL = new NativeArray<quaternion>(LeftHandJoints.Count, Allocator.Persistent);
-        NativeArray<int> cwp_JointToParticleMapL = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> JointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> JointRotationsL = new NativeArray<quaternion>(LeftHandJoints.Count, Allocator.Persistent);
+        NativeArray<int> JointToParticleMapL = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < LeftHandJointIndices.Count; i++)
         {
-            cwp_JointToParticleMapL[i] = LeftHandJointIndices[i];
+            JointToParticleMapL[i] = LeftHandJointIndices[i];
         }
         #endregion
         #region Pseudo Mesh
-        NativeArray<Vector3> cwp_PseudoMeshParticlePositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> BaseMeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < LeftHandJointIndices.Count; i++)
         {
-            cwp_PseudoMeshParticlePositionsL[i] = LeftHandRelativePositions[i];
+            BaseMeshPositionsL[i] = LeftHandRelativePositions[i];
         }
-        NativeArray<Vector3> cwp_WorldPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> DynamicMeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
-        positionJobL = new ComputeWorldPositionJob
+        updateMeshJobL = new UpdateMeshJob
         {
             #region Joints
-            cwp_JointPositions = cwp_JointPositionsL,
-            cwp_JointRotations = cwp_JointRotationsL,
-            cwp_JointToParticleMap = cwp_JointToParticleMapL,
+            JointPositions = JointPositionsL,
+            JointRotations = JointRotationsL,
+            JointToParticleMap = JointToParticleMapL,
             #endregion
             #region Pseudo Mesh
-            cwp_MeshPositions = cwp_PseudoMeshParticlePositionsL,
-            cwp_WorldPositions = cwp_WorldPositionsL,
+            BaseMeshPositions = BaseMeshPositionsL,
+            DynamicMeshPositions = DynamicMeshPositionsL,
             #endregion
             #region Position Offsets
-            cwp_PositionOffsets = cwp_PositionOffsets,
-            cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex
+            MeshPositionOffsets = MeshPositionOffsets,
+            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex
             #endregion
         };
         #endregion
-        #region Position Job R
+        #region Update Mesh Job R
         #region Joints
-        NativeArray<Vector3> cwp_JointPositionsR = new NativeArray<Vector3>(RightHandJoints.Count, Allocator.Persistent);
-        NativeArray<quaternion> cwp_JointRotationsR = new NativeArray<quaternion>(RightHandJoints.Count, Allocator.Persistent);
-        NativeArray<int> cwp_JointToParticleMapR = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> JointPositionsR = new NativeArray<Vector3>(RightHandJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> JointRotationsR = new NativeArray<quaternion>(RightHandJoints.Count, Allocator.Persistent);
+        NativeArray<int> JointToParticleMapR = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < RightHandJointIndices.Count; i++)
         {
-            cwp_JointToParticleMapR[i] = RightHandJointIndices[i];
+            JointToParticleMapR[i] = RightHandJointIndices[i];
         }
         #endregion
         #region Pseudo Mesh
-        NativeArray<Vector3> cwp_PseudoMeshParticlePositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> BaseMeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < RightHandJointIndices.Count; i++)
         {
-            cwp_PseudoMeshParticlePositionsR[i] = RightHandRelativePositions[i];
+            BaseMeshPositionsR[i] = RightHandRelativePositions[i];
         }
-        NativeArray<Vector3> cwp_WorldPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> DynamicMeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
-        positionJobR = new ComputeWorldPositionJob
+        updateMeshJobR = new UpdateMeshJob
         {
             #region Joints
-            cwp_JointPositions = cwp_JointPositionsR,
-            cwp_JointRotations = cwp_JointRotationsR,
-            cwp_JointToParticleMap = cwp_JointToParticleMapR,
+            JointPositions = JointPositionsR,
+            JointRotations = JointRotationsR,
+            JointToParticleMap = JointToParticleMapR,
             #endregion
             #region Pseudo Mesh
-            cwp_MeshPositions = cwp_PseudoMeshParticlePositionsR,
-            cwp_WorldPositions = cwp_WorldPositionsR,
+            BaseMeshPositions = BaseMeshPositionsR,
+            DynamicMeshPositions = DynamicMeshPositionsR,
             #endregion
             #region Position Offsets
-            cwp_PositionOffsets = cwp_PositionOffsets,
-            cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex
+            MeshPositionOffsets = MeshPositionOffsets,
+            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex
             #endregion
         };
         #endregion
@@ -480,47 +478,47 @@ public class TheOtherFactor : MonoBehaviour
             if (isEvenFrame)
             {
                 #region World Position Jobs
-                cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex < positionJobL.cwp_PositionOffsets.Length ? cwp_PositionOffsetsIndex + 1 : 0;
+                MeshPositionOffsetsIndex = MeshPositionOffsetsIndex < updateMeshJobL.MeshPositionOffsets.Length ? MeshPositionOffsetsIndex + 1 : 0;
                 #region Schedule PositionL Job
                 positionJobHandleL.Complete();
                 #region Update Joint Positions
-                for (int i = 0; i < positionJobL.cwp_JointPositions.Length; i++)
+                for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
                 {
-                    positionJobL.cwp_JointPositions[i] = LeftHandJoints[i].position;
-                    positionJobL.cwp_JointRotations[i] = LeftHandJoints[i].rotation;                   
+                    updateMeshJobL.JointPositions[i] = LeftHandJoints[i].position;
+                    updateMeshJobL.JointRotations[i] = LeftHandJoints[i].rotation;                   
                 }
                 #endregion
                 #region Update World Positions in Neutral Array for Attraction Job to Read
-                for (int i = 0; i < positionJobL.cwp_WorldPositions.Length; i++)
+                for (int i = 0; i < updateMeshJobL.DynamicMeshPositions.Length; i++)
                 {
-                    attractJob.MeshPositionsL[i] = positionJobL.cwp_WorldPositions[i];
+                    attractJob.MeshPositionsL[i] = updateMeshJobL.DynamicMeshPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
-                positionJobL.cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex;
+                updateMeshJobL.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
-                if (positionJobL.cwp_JointPositions.Length > 0) positionJobHandleL = positionJobL.Schedule(particleSystem.particleCount / 2, 1024);
+                if (updateMeshJobL.JointPositions.Length > 0) positionJobHandleL = updateMeshJobL.Schedule(particleSystem.particleCount / 2, 1024);
                 #endregion
                 #region Schedule PositionR Job
                 positionJobHandleR.Complete();
                 #region Update Joint Positions
-                for (int i = 0; i < positionJobR.cwp_JointPositions.Length; i++)
+                for (int i = 0; i < updateMeshJobR.JointPositions.Length; i++)
                 {
-                    positionJobR.cwp_JointPositions[i] = RightHandJoints[i].position;
-                    positionJobR.cwp_JointRotations[i] = RightHandJoints[i].rotation;
+                    updateMeshJobR.JointPositions[i] = RightHandJoints[i].position;
+                    updateMeshJobR.JointRotations[i] = RightHandJoints[i].rotation;
                 }
                 #endregion
                 #region Update World Positions in Neutral Array for Attraction Job to Read
-                for (int i = 0; i < positionJobR.cwp_WorldPositions.Length; i++)
+                for (int i = 0; i < updateMeshJobR.DynamicMeshPositions.Length; i++)
                 {
-                    attractJob.MeshPositionsR[i] = positionJobR.cwp_WorldPositions[i];
+                    attractJob.MeshPositionsR[i] = updateMeshJobR.DynamicMeshPositions[i];
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
-                positionJobR.cwp_PositionOffsetsIndex = cwp_PositionOffsetsIndex;
+                updateMeshJobR.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
-                if (positionJobR.cwp_JointPositions.Length > 0) positionJobHandleR = positionJobR.Schedule(particleSystem.particleCount / 2, 1024);
+                if (updateMeshJobR.JointPositions.Length > 0) positionJobHandleR = updateMeshJobR.Schedule(particleSystem.particleCount / 2, 1024);
                 #endregion
                 #endregion
             }
@@ -796,45 +794,45 @@ public class TheOtherFactor : MonoBehaviour
     /// This approach is crucial for multiplayer online synchronization and provides dynamic, natural-looking particle movement around the Hands.
     /// </summary>
     [BurstCompile]
-    struct ComputeWorldPositionJob : IJobParallelFor
+    struct UpdateMeshJob : IJobParallelFor
     {
         #region Joints
         // Read-only arrays for joint positions and rotations, and a map from joint to particle
-        [ReadOnly] public NativeArray<Vector3> cwp_JointPositions;
-        [ReadOnly] public NativeArray<quaternion> cwp_JointRotations;
-        [ReadOnly] public NativeArray<int> cwp_JointToParticleMap;
+        [ReadOnly] public NativeArray<Vector3> JointPositions;
+        [ReadOnly] public NativeArray<quaternion> JointRotations;
+        [ReadOnly] public NativeArray<int> JointToParticleMap;
         #endregion
         #region Pseudo Mesh
         // Pseudo mesh positions and output array for world positions of particles
-        [ReadOnly] public NativeArray<Vector3> cwp_MeshPositions;
-        public NativeArray<Vector3> cwp_WorldPositions; // Output array
+        [ReadOnly] public NativeArray<Vector3> BaseMeshPositions;
+        public NativeArray<Vector3> DynamicMeshPositions; // Output array
         #endregion
         #region Position Offset
         // Noise array for position offsets and the current index in the noise array
-        [ReadOnly] public NativeArray<float> cwp_PositionOffsets;
-        [ReadOnly] public int cwp_PositionOffsetsIndex;
+        [ReadOnly] public NativeArray<float> MeshPositionOffsets;
+        [ReadOnly] public int MeshPositionOffsetsIndex;
         #endregion
         public void Execute(int index)
         {
             // Calculate position offset for current particle based on noise array
-            float positionOffset = cwp_PositionOffsets[(index + cwp_PositionOffsetsIndex) % cwp_PositionOffsets.Length];
+            float positionOffset = MeshPositionOffsets[(index + MeshPositionOffsetsIndex) % MeshPositionOffsets.Length];
 
             // Get the relative position, joint index, and joint data for the current particle
-            Vector3 relativePosition = cwp_MeshPositions[index];
-            int jointIndex = cwp_JointToParticleMap[index];
-            Vector3 jointPosition = cwp_JointPositions[jointIndex];
-            Quaternion jointRotation = cwp_JointRotations[jointIndex];
+            Vector3 baseMeshPosition = BaseMeshPositions[index];
+            int jointIndex = JointToParticleMap[index];
+            Vector3 jointPosition = JointPositions[jointIndex];
+            Quaternion jointRotation = JointRotations[jointIndex];
 
             // Compute the final world position for the particle and store it
-            cwp_WorldPositions[index] = ComputeWorldPosition(jointPosition, jointRotation, relativePosition, positionOffset);
+            DynamicMeshPositions[index] = ComputeWorldPosition(jointPosition, jointRotation, baseMeshPosition, positionOffset);
         }
         #region Compute World Position
         // Inline method for computing world position of a particle
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector3 ComputeWorldPosition(Vector3 jointPosition, Quaternion jointRotation, Vector3 relativePosition, float positionNoise)
+        private static Vector3 ComputeWorldPosition(Vector3 jointPosition, Quaternion jointRotation, Vector3 baseMeshPosition, float positionNoise)
         {
             // Calculate the world position based on joint data and relative position
-            Vector3 worldPosition = jointPosition + (Vector3)math.mul(jointRotation, relativePosition);
+            Vector3 worldPosition = jointPosition + (Vector3)math.mul(jointRotation, baseMeshPosition);
 
             // Apply noise to the world position to interpolate between joint and pseudo mesh position
             worldPosition = worldPosition + (jointPosition - worldPosition) * positionNoise;
