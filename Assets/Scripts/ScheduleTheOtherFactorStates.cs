@@ -88,8 +88,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public float SizeLerp = .05f;
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Material ParticleMaterial;
-    private ParticleSystem particleSystem;
-    private ParticleSystemRenderer particleRenderer;
     #endregion
     #region Attraction
     [Header("Attraction")]
@@ -134,10 +132,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public bool UseHeartbeat = true;
     public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
     #endregion
-    #region Pseudo Mesh
-    [Header("Pseudo Mesh")]
-    private PseudoMeshCreator PseudoMeshCreator;
-    #endregion
     #endregion
     #region Utility
     public bool PinchToSwitchPresets = false;
@@ -170,7 +164,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         UpdateTOF();
         UpdatePresetNameList();
 
-        if (DisplayCanvas) presetDisplayText.text = currentPresetName;
+        if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
         else presetDisplayText.text = "";
 
         if (PinchToSwitchPresets)
@@ -385,7 +379,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         currentPresetName = state.Name;
 
         canvasMover.SetCanvasPosition();
-        if(DisplayCanvas) presetDisplayText.text = currentPresetName;
+        if(DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
     }
     public void UpdatePresetNameList()
     {
@@ -434,5 +428,57 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     {
         tof.StopTheOtherFactor();
         tofIsRunningJobs = false;
+    }
+    string FormatVariablesForDisplay()
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+        sb.AppendLine($"Current Preset Index: {currentPresetIndex}");
+        sb.AppendLine($"Current Preset Name: {currentPresetName}");
+
+        // Particles Section
+        sb.AppendLine("\nParticles:");
+        sb.AppendLine($"Particles Per Hand: {ParticlesPerHand}");
+        sb.AppendLine($"Particle Size Min/Max: ({ParticleSizeMinMax.x}, {ParticleSizeMinMax.y})");
+        sb.AppendLine($"Distance For Min Size: {DistanceForMinSize}");
+        sb.AppendLine($"Size Lerp: {SizeLerp}");
+        sb.AppendLine($"Particle Material: {(ParticleMaterial != null ? ParticleMaterial.name : "None")}");
+
+        // Attraction Section
+        sb.AppendLine("\nAttraction:");
+        sb.AppendLine($"Attraction Strength: {AttractionStrength}");
+
+        // Velocity Section
+        sb.AppendLine("\nVelocity:");
+        sb.AppendLine($"Velocity Lerp: {VelocityLerp}");
+
+        // Attraction Scaling Per Group/Hand Section
+        sb.AppendLine("\nAttraction Scaling Per Group/Hand:");
+        sb.AppendLine($"Particles Attraction Group 1: ({ParticlesAttractionGroup1.x}, {ParticlesAttractionGroup1.y})");
+        sb.AppendLine($"Particles Attraction Group 2: ({ParticlesAttractionGroup2.x}, {ParticlesAttractionGroup2.y})");
+
+        // Per Particle Scaling Section
+        sb.AppendLine("\nPer Particle Scaling:");
+        sb.AppendLine($"Per Particle Scaling Min/Max: ({PerParticleScalingMinMax.x}, {PerParticleScalingMinMax.y})");
+        sb.AppendLine($"Per Particle Scaling Power Factor: {PerParticleScalingPowerFactor}");
+
+        // Position Offsets Section
+        sb.AppendLine("\nPosition Offsets:");
+        sb.AppendLine($"Position Offset Min/Max: ({PositionOffsetMinMax.x}, {PositionOffsetMinMax.y})");
+
+        // Index Step Size Section
+        sb.AppendLine("\nIndex Step Size:");
+        sb.AppendLine($"Index Step Size Min/Max: ({IndexStepSizeMinMax.x}, {IndexStepSizeMinMax.y})");
+
+        // Color Section
+        sb.AppendLine("\nColor:");
+        sb.AppendLine($"Use Debug Colors: {UseDebugColors}");
+        sb.AppendLine($"Color Time Gradient Update Speed: {ColorTimeGradientUpdateSpeed}");
+        sb.AppendLine($"Color Lerp: {ColorLerp}");
+        sb.AppendLine($"Heartbeat Speed: {HeartbeatSpeed}");
+        sb.AppendLine($"Use Heartbeat: {UseHeartbeat}");
+        sb.AppendLine($"Alpha Min/Max: ({AlphaMinMax.x}, {AlphaMinMax.y})");
+
+        return sb.ToString();
     }
 }

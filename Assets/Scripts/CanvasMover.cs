@@ -19,7 +19,6 @@ public class CanvasMover : MonoBehaviour
         {
             // Position the canvas in front of the camera
             transform.position = targetCamera.transform.position + targetCamera.transform.forward * distanceFromCamera;
-
             // Optionally, make the canvas face the camera
             transform.LookAt(transform.position + targetCamera.transform.rotation * Vector3.forward, targetCamera.transform.rotation * Vector3.up);
         }
