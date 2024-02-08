@@ -26,8 +26,6 @@ public class TheOtherFactor : MonoBehaviour
     public float SizeLerp = .05f;
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Material ParticleMaterial;
-    private ParticleSystem particleSystem;
-    private ParticleSystemRenderer particleRenderer;
     #endregion
     #region Attraction
     [Header("Attraction")]
@@ -47,7 +45,9 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Per Particle Scaling
     [Header("Per Particle Scaling")]
+    [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Vector2 PerParticleScalingMinMax = new Vector2(0f,1f);
+    [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public float PerParticleScalingPowerFactor = .1f;
     #endregion
     #region Position Offsets
@@ -73,12 +73,13 @@ public class TheOtherFactor : MonoBehaviour
     public bool UseHeartbeat = true;
     public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
     #endregion
-    #region Pseudo Mesh
-    [Header("Pseudo Mesh")]
-    private PseudoMeshCreator PseudoMeshCreator;
-    #endregion
     #endregion
     #region Internal Variables
+    private ParticleSystem particleSystem;
+    private ParticleSystemRenderer particleRenderer;
+    #region Pseudo Mesh
+    private PseudoMeshCreator PseudoMeshCreator;
+    #endregion
     #region Attraction Job
     #region Job Handle
     private AttractionJob attractJob;
