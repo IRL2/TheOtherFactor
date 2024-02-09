@@ -63,9 +63,9 @@ public class PseudoMeshCreator : MonoBehaviour
     #endregion
     #endregion
     #region Start
-    private void Start()
+    private async void Start()
     {
-        if(Initialize) InitializeHandPseudoMeshCoroutine();
+        if (Initialize) await InitializeHandPseudoMeshCoroutine();
     }
     #endregion
     #region Initialize Hand Pseudo Mesh Coroutine
@@ -178,8 +178,8 @@ public class PseudoMeshCreator : MonoBehaviour
         }
 
         // Define the order of joints for each finger
-        string[] thumbOrder = { "0", "1", "3", "2" };
-        string[] fingerOrder = { "1", "3", "2" };
+        string[] thumbOrder = { "0", "1", "2", "3" };// { "0", "1", "3", "2" };
+        string[] fingerOrder = { "1", "2", "3" };//{ "1", "3", "2" };
 
         string handTypeShort = handType == "right" ? "r" : "l";
 
@@ -559,6 +559,7 @@ public class PseudoMeshCreator : MonoBehaviour
     /// </summary>
     public (List<int>, List<Vector3>) ResizeListsPreservingPercentages(int targetLength, string hand)
     {
+        #region Basic Prep
         if (hand != "left" && hand != "right")
         {
             throw new ArgumentException("Invalid hand string provided.");
@@ -589,7 +590,6 @@ public class PseudoMeshCreator : MonoBehaviour
         List<int> resizedIndices = new List<int>();
         List<Vector3> resizedRelativePositions = new List<Vector3>();
         Dictionary<int, List<int>> indexPositions = new Dictionary<int, List<int>>();
-
         // Group positions by index
         for (int i = 0; i < originalIndices.Count; i++)
         {
@@ -601,6 +601,20 @@ public class PseudoMeshCreator : MonoBehaviour
             indexPositions[index].Add(i);
         }
 
+        // Define the custom order and selection strategy
+        var orderAndSelection = new (int index, string part)[]
+        {
+            (0, "second"), (0, "first"), (1, "first"), (2, "first"), (3, "all"), (2, "second"), (1, "second"),
+            (4, "first"), (5, "first"), (6, "all"), (5, "second"), (4, "second"),
+            (7, "first"), (8, "first"), (9, "all"), (8, "second"), (7, "second"),
+            (10, "first"), (11, "first"), (12, "all"), (11, "second"), (10, "second"),
+            (13, "first"), (14, "first"), (15, "first"), (16, "all"), (15, "second"), (14, "second"), (13, "second")
+        };
+
+        #endregion
+
+        // previous version
+        /*
         foreach (var kvp in indexPositions)
         {
             int index = kvp.Key;
@@ -614,6 +628,45 @@ public class PseudoMeshCreator : MonoBehaviour
                 int posIndex = (int)Math.Round(i * interval);
                 resizedIndices.Add(index);
                 resizedRelativePositions.Add(originalRelativePositions[positions[posIndex]]);
+            }
+        }
+        */
+
+        foreach (var item in orderAndSelection)
+        {
+            if (!indexPositions.ContainsKey(item.index)) continue;
+            List<int> positions = indexPositions[item.index];
+            int countForThisIndex = (int)Math.Round(percentages[item.index] * targetLength / 100.0);
+
+            // Calculate the interval for selecting positions to ensure they are spread out
+            double interval = positions.Count / (double)countForThisIndex;
+
+            List<int> selectedPositions = new List<int>();
+            for (int i = 0; i < countForThisIndex && i * interval < positions.Count; i++)
+            {
+                int posIndex = (int)Math.Round(i * interval);
+                selectedPositions.Add(positions[posIndex]);
+            }
+
+            // Add the selected positions according to the specified part (first/second/all)
+            switch (item.part)
+            {
+                case "first":
+                    selectedPositions = selectedPositions.Take(selectedPositions.Count / 2).ToList();
+                    break;
+                case "second":
+                    selectedPositions = selectedPositions.Skip(selectedPositions.Count / 2).ToList();
+                    break;
+                case "all":
+                    // No change needed
+                    break;
+            }
+
+            foreach (var posIndex in selectedPositions)
+            {
+                resizedIndices.Add(item.index);
+                resizedRelativePositions.Add(originalRelativePositions[posIndex]);
+                if (originalRelativePositions[posIndex] == Vector3.zero) Debug.LogWarning("zero at: " + posIndex);
             }
         }
 

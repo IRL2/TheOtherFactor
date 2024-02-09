@@ -314,7 +314,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     {
         if (!Application.isPlaying || state.RestartEngine)
         {
-            tof.StopTheOtherFactor();
+            if(Application.isPlaying) tof.StopTheOtherFactor();
             #region Particles
             tof.ParticlesPerHand = state.ParticlesPerHand;
             ParticlesPerHand = state.ParticlesPerHand;
@@ -333,7 +333,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             tof.IndexStepSizeMinMax = state.IndexStepSizeMinMax;
             IndexStepSizeMinMax = state.IndexStepSizeMinMax;
             #endregion
-            tof.StartTheOtherFactor();
+            if(Application.isPlaying) tof.StartTheOtherFactor();
         }
         #region Particles
         tof.ParticleSizeMinMax = state.ParticleSizeMinMax;

@@ -8,6 +8,7 @@ public class TheOtherFactorEditor : Editor
 {
     public override void OnInspectorGUI()
     {
+        DrawDefaultInspector();
         // Do not call base.OnInspectorGUI() to ensure the inspector is blank
     }
 }
