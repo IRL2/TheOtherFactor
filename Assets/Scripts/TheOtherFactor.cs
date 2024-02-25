@@ -39,16 +39,18 @@ public class TheOtherFactor : MonoBehaviour
     #region Attraction Scaling Per Group/Hand
     [Header("Attraction Scaling Per Group/Hand")]
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
-    public Vector2 ParticlesAttractionGroup1 = Vector2.one;
+    public Vector4 ParticlesAttractionGroup1 = Vector4.one;
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
-    public Vector2 ParticlesAttractionGroup2 = Vector2.one;
+    public Vector4 ParticlesAttractionGroup2 = Vector4.one;
+    public Vector4 ParticlesAttractionGroup3 = Vector4.one;
+    public Vector4 ParticlesAttractionGroup4 = Vector4.one;
     #endregion
     #region Per Particle Scaling
     [Header("Per Particle Scaling")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
-    public Vector2 PerParticleScalingMinMax = new Vector2(0f,1f);
+    public Vector2 PerParticleScalingMinMax = new Vector2(0f, 1f);
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
-    public float PerParticleScalingPowerFactor = .1f;
+    public float PerParticleScalingExponent = .1f;
     #endregion
     #region Position Offsets
     // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
@@ -73,6 +75,12 @@ public class TheOtherFactor : MonoBehaviour
     public bool UseHeartbeat = true;
     public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
     #endregion
+    #region Stretch
+    [Header("Stretch")]
+    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
+    private float[] StretchFactorIncrease;
+    #endregion
     #endregion
     #region Internal Variables
     private ParticleSystem particleSys;
@@ -96,6 +104,12 @@ public class TheOtherFactor : MonoBehaviour
 
     private JobHandle updateMeshJobHandleR;
     private UpdateMeshJob updateMeshJobR;
+
+    private JobHandle updateMeshJobHandleLM;
+    private UpdateMeshJob updateMeshJobLM;
+
+    private JobHandle updateMeshJobHandleRM;
+    private UpdateMeshJob updateMeshJobRM;
     #endregion
     #region Position Offsets
     private int MeshPositionOffsetsIndex = 0;
@@ -114,8 +128,11 @@ public class TheOtherFactor : MonoBehaviour
     private HandVisual LeftHandVisual;
     private HandVisual RightHandVisual;
     #endregion
-    private List<Transform> LeftHandJoints = new List<Transform>();
-    private List<Transform> RightHandJoints = new List<Transform>();
+    private ReplayCapture replay;
+    private List<Transform> LJoints = new List<Transform>();
+    private List<Transform> RJoints = new List<Transform>();
+    private List<Transform> LMJoints = new List<Transform>();
+    private List<Transform> RMJoints = new List<Transform>();
     #endregion
     #region Skinned Mesh Renderer
     private SkinnedMeshRenderer leftHandMesh;
@@ -165,7 +182,7 @@ public class TheOtherFactor : MonoBehaviour
         PseudoMeshCreator = GameObject.Find("PseudoMeshCreator").GetComponent<PseudoMeshCreator>();
         #endregion
         #region Hands
-        LeftHandVisual =  PseudoMeshCreator.LeftHandVisual;
+        LeftHandVisual = PseudoMeshCreator.LeftHandVisual;
         if (LeftHandVisual == null)
         {
             Debug.LogError("LeftHandVisual GameObject or HandVisual component not found.");
@@ -195,6 +212,7 @@ public class TheOtherFactor : MonoBehaviour
             Debug.LogError("r_handMeshNode GameObject or SkinnedMeshRenderer component not found.");
         }
         #endregion
+        replay = GameObject.Find("ReplayJoints").GetComponent<ReplayCapture>();
         #endregion
         StartTheOtherFactor();
     }
@@ -223,6 +241,17 @@ public class TheOtherFactor : MonoBehaviour
         #region Wait For Hands Close To HMD
         await WaitForHandsCloseToHMD(.4f);
         #endregion
+        #region Stretch
+        // Compute the position in front of the camera
+        //CenterPosition = Camera.main.transform.position + Camera.main.transform.forward * CenterPositionDistance;
+        StretchFactorIncrease = new float[ParticlesPerHand];
+        for (int i = 0; i < StretchFactorIncrease.Length; i++)
+        {
+            float linearRandom = UnityEngine.Random.Range(StretchFactorMinMax.x, StretchFactorMinMax.y);
+            StretchFactorIncrease[i] = Mathf.Pow(linearRandom, StretchFactorExponent);
+            //StretchFactorIncrease[i] = UnityEngine.Random.Range(StretchFactorMinMax.x, StretchFactorMinMax.y);
+        }
+        #endregion
         #region Emit Particles
         EmitParticles();
         await Task.Yield();
@@ -238,10 +267,12 @@ public class TheOtherFactor : MonoBehaviour
     #region Fetch Pseudo Mesh
     private void FetchPseudoMesh()
     {
-        LeftHandJoints = PseudoMeshCreator.LeftHandJoints;
-        RightHandJoints = PseudoMeshCreator.RightHandJoints;
-        (LeftHandJointIndices, LeftHandRelativePositions) =  PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "left");// PseudoMeshCreator.LeftHandRelativePositions;
-        (RightHandJointIndices, RightHandRelativePositions) = PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "right");// PseudoMeshCreator.LeftHandRelativePositions;
+        LJoints = PseudoMeshCreator.LeftHandJoints;
+        RJoints = PseudoMeshCreator.RightHandJoints;
+        LMJoints = replay.leftHandJointsOutput;
+        RMJoints = replay.rightHandJointsOutput;
+        (LeftHandJointIndices, LeftHandRelativePositions) = PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "left");// PseudoMeshCreator.LeftHandRelativePositions;
+        (RightHandJointIndices, RightHandRelativePositions) = PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "right");// PseudoMeshCreator.LeftHandRelativePositions;       
     }
     #endregion
     #region Initialize Per Particle Scaling Array
@@ -252,15 +283,15 @@ public class TheOtherFactor : MonoBehaviour
         for (int i = 0; i < totalParticles; i++)
         {
             float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
-            PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingPowerFactor);
+            PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingExponent);
         }
     }
     #endregion
     # region Wait For Hands Close To HMD
     public async Task WaitForHandsCloseToHMD(float targetDistance)
     {
-        var leftMiddle1Joint = LeftHandJoints.FirstOrDefault(j => j.name == "b_l_middle1");
-        var rightMiddle1Joint = RightHandJoints.FirstOrDefault(j => j.name == "b_r_middle1");
+        var leftMiddle1Joint = LJoints.FirstOrDefault(j => j.name == "b_l_middle1");
+        var rightMiddle1Joint = RJoints.FirstOrDefault(j => j.name == "b_r_middle1");
 
         // Initially assume both hands are not within the target distance
         bool isLeftHandClose = false;
@@ -299,8 +330,8 @@ public class TheOtherFactor : MonoBehaviour
         };
 
         // Find the specific joints in the arrays
-        var leftMiddle1Joint = LeftHandJoints.FirstOrDefault(j => j.name == "b_l_middle1");
-        var rightMiddle1Joint = RightHandJoints.FirstOrDefault(j => j.name == "b_r_middle1");
+        var leftMiddle1Joint = LJoints.FirstOrDefault(j => j.name == "b_l_middle1");
+        var rightMiddle1Joint = RJoints.FirstOrDefault(j => j.name == "b_r_middle1");
 
         if (leftMiddle1Joint != null && rightMiddle1Joint != null)
         {
@@ -329,23 +360,27 @@ public class TheOtherFactor : MonoBehaviour
         #region AttractionJob
         #region Initialize Arrays
         #region Attraction Scaling Per Group/Hand
-        NativeArray<Vector2> ParticlesAttractionLR = new NativeArray<Vector2>(totalParticles, Allocator.Persistent);
-        NativeArray<Vector2> PerParticleScaling = new NativeArray<Vector2>(totalParticles, Allocator.Persistent);
+        NativeArray<Vector4> ParticlesAttractionLR = new NativeArray<Vector4>(totalParticles, Allocator.Persistent);
+        NativeArray<Vector4> PerParticleScaling = new NativeArray<Vector4>(totalParticles, Allocator.Persistent);
         #endregion
         #region Pseudo Mesh
         #region Positions
         NativeArray<Vector3> MeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         NativeArray<Vector3> MeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
-        //NativeArray<Vector3> a_JointPositionsPerParticleL = new NativeArray<Vector3> (totalParticles, Allocator.Persistent);
-        //NativeArray<Vector3> a_JointPositionsPerParticleR = new NativeArray<Vector3>(totalParticles, Allocator.Persistent);
+        NativeArray<Vector3> MeshPositionsRL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        NativeArray<Vector3> MeshPositionsRR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
         #region Indices
         NativeArray<int> MeshIndicesL = new NativeArray<int>(totalParticles, Allocator.Persistent);
         NativeArray<int> MeshIndicesR = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> MeshIndicesRL = new NativeArray<int>(totalParticles, Allocator.Persistent);
+        NativeArray<int> MeshIndicesRR = new NativeArray<int>(totalParticles, Allocator.Persistent);
         for (int i = 0; i < totalParticles; i++)
         {
             MeshIndicesL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
             MeshIndicesR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            MeshIndicesRL[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
+            MeshIndicesRR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
         }
         NativeArray<int> IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
         for (int i = 0; i < totalParticles; i++)
@@ -356,6 +391,8 @@ public class TheOtherFactor : MonoBehaviour
         #region Joint Distance Moved
         NativeArray<float> a_JointDistanceMovedL = new NativeArray<float>(totalParticles, Allocator.Persistent);
         NativeArray<float> a_JointDistanceMovedR = new NativeArray<float>(totalParticles, Allocator.Persistent);
+        NativeArray<float> a_JointDistanceMovedRL = new NativeArray<float>(totalParticles, Allocator.Persistent);
+        NativeArray<float> a_JointDistanceMovedRR = new NativeArray<float>(totalParticles, Allocator.Persistent);
         #endregion
         #endregion
         #endregion
@@ -369,25 +406,29 @@ public class TheOtherFactor : MonoBehaviour
             VelocityLerp = VelocityLerp,
             #endregion
             #region Attraction Scaling Per Group/Hand
-            ParticlesAttractionLR = ParticlesAttractionLR,
+            ParticlesAttractionGroups = ParticlesAttractionLR,
             PerParticleScaling = PerParticleScaling,
             #endregion
             #region Pseudo Mesh
             #region Positions
             MeshPositionsL = MeshPositionsL,
             MeshPositionsR = MeshPositionsR,
-            //JointPositionsL = a_JointPositionsPerParticleL,
-            //JointPositionsR = a_JointPositionsPerParticleR,
+            MeshPositionsLM = MeshPositionsRL,
+            MeshPositionsRM = MeshPositionsRR,
             #endregion
             #region Indices
             MeshIndicesL = MeshIndicesL,
             MeshIndicesR = MeshIndicesR,
+            MeshIndicesLM = MeshIndicesRL,
+            MeshIndicesRM = MeshIndicesRR,
             IndexStepSizes = IndexStepSizes,
             IndexStepsSizeIndex = 0,
             #endregion
             #region Joint Distance Moved
             JointDistanceMovedL = a_JointDistanceMovedL,
             JointDistanceMovedR = a_JointDistanceMovedR,
+            JointDistanceMovedLM = a_JointDistanceMovedRL,
+            JointDistanceMovedRM = a_JointDistanceMovedRR,
             #endregion
             #endregion
             #region Color
@@ -403,7 +444,7 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
         };
         #endregion
-        #region Position Jobs
+        #region Update Mesh Jobs
         #region World Position Offsets
         NativeArray<float> MeshPositionOffsets = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < ParticlesPerHand; i++)
@@ -413,9 +454,9 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Update Mesh Job L
         #region Joints
-        NativeArray<Vector3> JointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
-        NativeArray<Vector3> PrevJointPositionsL = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
-        NativeArray<quaternion> JointRotationsL = new NativeArray<quaternion>(LeftHandJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> JointPositionsL = new NativeArray<Vector3>(LJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> PrevJointPositionsL = new NativeArray<Vector3>(LJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> JointRotationsL = new NativeArray<quaternion>(LJoints.Count, Allocator.Persistent);
         NativeArray<int> JointToParticleMapL = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < LeftHandJointIndices.Count; i++)
         {
@@ -431,6 +472,14 @@ public class TheOtherFactor : MonoBehaviour
             BaseMeshPositionsL[i] = LeftHandRelativePositions[i];
         }
         NativeArray<Vector3> DynamicMeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        #endregion
+        #region StretchL
+        NativeArray<float> StretchFactorL = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < StretchFactorL.Length; i++)
+        {
+            StretchFactorL[i] = 0;
+        }
+
         #endregion
         updateMeshJobL = new UpdateMeshJob
         {
@@ -448,22 +497,24 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Position Offsets
             MeshPositionOffsets = MeshPositionOffsets,
-            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex
+            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex,
+            #endregion
+            #region Stretch
+            StretchFactor = StretchFactorL,
             #endregion
         };
         #endregion
         #region Update Mesh Job R
         #region Joints
-        NativeArray<Vector3> JointPositionsR = new NativeArray<Vector3>(RightHandJoints.Count, Allocator.Persistent);
-        NativeArray<Vector3> PrevJointPositionsR = new NativeArray<Vector3>(LeftHandJoints.Count, Allocator.Persistent);
-        NativeArray<quaternion> JointRotationsR = new NativeArray<quaternion>(RightHandJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> JointPositionsR = new NativeArray<Vector3>(RJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> PrevJointPositionsR = new NativeArray<Vector3>(LJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> JointRotationsR = new NativeArray<quaternion>(RJoints.Count, Allocator.Persistent);
         NativeArray<int> JointToParticleMapR = new NativeArray<int>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < RightHandJointIndices.Count; i++)
         {
             JointToParticleMapR[i] = RightHandJointIndices[i];
         }
         NativeArray<float> JointDistanceMovedR = new NativeArray<float>(totalParticles, Allocator.Persistent);
-        //NativeArray<Vector3> JointPositionsPerParticleR = new NativeArray<Vector3>(totalParticles, Allocator.Persistent);
         #endregion
         #region Pseudo Mesh
         NativeArray<Vector3> BaseMeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
@@ -473,6 +524,13 @@ public class TheOtherFactor : MonoBehaviour
         }
         NativeArray<Vector3> DynamicMeshPositionsR = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
+        #region StretchR
+        NativeArray<float> StretchFactorR = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < StretchFactorR.Length; i++)
+        {
+            StretchFactorR[i] = 0;
+        }
+        #endregion
         updateMeshJobR = new UpdateMeshJob
         {
             #region Joints
@@ -481,7 +539,6 @@ public class TheOtherFactor : MonoBehaviour
             JointRotations = JointRotationsR,
             JointToParticleMap = JointToParticleMapR,
             JointDistanceMoved = JointDistanceMovedR,
-            //JointPositionsPerParticle = JointPositionsPerParticleR,
             #endregion
             #region Pseudo Mesh
             BaseMeshPositions = BaseMeshPositionsR,
@@ -489,7 +546,89 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Position Offsets
             MeshPositionOffsets = MeshPositionOffsets,
-            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex
+            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex,
+            #endregion
+            #region Stretch
+            StretchFactor = StretchFactorR,
+            #endregion
+        };
+        #endregion
+        #region Update Mesh Job LM
+        #region Joints
+        NativeArray<Vector3> JointPositionsLM = new NativeArray<Vector3>(LJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> PrevJointPositionsLM = new NativeArray<Vector3>(LJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> JointRotationsLM = new NativeArray<quaternion>(LJoints.Count, Allocator.Persistent);
+        NativeArray<float> JointDistanceMovedLM = new NativeArray<float>(totalParticles, Allocator.Persistent);
+        #endregion
+        #region Pseudo Mesh
+        NativeArray<Vector3> DynamicMeshPositionsML = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        #endregion
+        #region StretchRL
+        NativeArray<float> StretchFactorLM = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < StretchFactorLM.Length; i++)
+        {
+            StretchFactorLM[i] = 0;
+        }
+
+        #endregion
+        updateMeshJobLM = new UpdateMeshJob
+        {
+            #region Joints
+            JointPositions = JointPositionsLM,
+            PrevJointPositions = PrevJointPositionsLM,
+            JointRotations = JointRotationsLM,
+            JointToParticleMap = JointToParticleMapL,
+            JointDistanceMoved = JointDistanceMovedLM,
+            #endregion
+            #region Pseudo Mesh
+            BaseMeshPositions = BaseMeshPositionsL,
+            DynamicMeshPositions = DynamicMeshPositionsML,
+            #endregion
+            #region Position Offsets
+            MeshPositionOffsets = MeshPositionOffsets,
+            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex,
+            #endregion
+            #region Stretch
+            StretchFactor = StretchFactorLM,
+            #endregion
+        };
+        #endregion
+        #region Update Mesh Job RM
+        #region Joints
+        NativeArray<Vector3> JointPositionsRM = new NativeArray<Vector3>(RJoints.Count, Allocator.Persistent);
+        NativeArray<Vector3> PrevJointPositionsRM = new NativeArray<Vector3>(LJoints.Count, Allocator.Persistent);
+        NativeArray<quaternion> JointRotationsRM = new NativeArray<quaternion>(RJoints.Count, Allocator.Persistent);
+        NativeArray<float> JointDistanceMovedRM = new NativeArray<float>(totalParticles, Allocator.Persistent);
+        #endregion
+        #region Pseudo Mesh
+        NativeArray<Vector3> DynamicMeshPositionsRM = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
+        #endregion
+        #region StretchRM
+        NativeArray<float> StretchFactorRM = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
+        for (int i = 0; i < StretchFactorRM.Length; i++)
+        {
+            StretchFactorRM[i] = 0;
+        }
+        #endregion
+        updateMeshJobRM = new UpdateMeshJob
+        {
+            #region Joints
+            JointPositions = JointPositionsRM,
+            PrevJointPositions = PrevJointPositionsRM,
+            JointRotations = JointRotationsRM,
+            JointToParticleMap = JointToParticleMapR,
+            JointDistanceMoved = JointDistanceMovedRM,
+            #endregion
+            #region Pseudo Mesh
+            BaseMeshPositions = BaseMeshPositionsR,
+            DynamicMeshPositions = DynamicMeshPositionsRM,
+            #endregion
+            #region Position Offsets
+            MeshPositionOffsets = MeshPositionOffsets,
+            MeshPositionOffsetsIndex = MeshPositionOffsetsIndex,
+            #endregion
+            #region Stretch
+            StretchFactor = StretchFactorRM,
             #endregion
         };
         #endregion
@@ -500,12 +639,14 @@ public class TheOtherFactor : MonoBehaviour
     #region Runtime Updates
     void OnParticleUpdateJobScheduled()
     {
-        if (RunJobs && attractionJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted)
+        if (RunJobs && attractionJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted && updateMeshJobHandleLM.IsCompleted && updateMeshJobHandleRM.IsCompleted)
         {
             #region Complete Jobs
             updateMeshJobHandleL.Complete();
             updateMeshJobHandleR.Complete();
             attractionJobHandle.Complete();
+            updateMeshJobHandleLM.Complete();
+            updateMeshJobHandleRM.Complete();
             #endregion
             if (isEvenFrame)
             {
@@ -515,10 +656,9 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
                 {
-                    updateMeshJobL.JointPositions[i] = LeftHandJoints[i].position;
-                    updateMeshJobL.JointRotations[i] = LeftHandJoints[i].rotation;                   
+                    updateMeshJobL.JointPositions[i] = LJoints[i].position;
+                    updateMeshJobL.JointRotations[i] = LJoints[i].rotation;
                 }
-                //attractJob.JointPositionsL = updateMeshJobL.JointPositionsPerParticle;
                 #endregion
                 #region Update Joint Distance Moved in Attraction Job
                 attractJob.JointDistanceMovedL = updateMeshJobL.JointDistanceMoved;
@@ -529,16 +669,21 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update PositionOffsetsIndex
                 updateMeshJobL.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
-                if (updateMeshJobL.JointPositions.Length > 0) updateMeshJobHandleL = updateMeshJobL.Schedule(particleSys.particleCount / 2, 1024);
+                #region Update Stretch
+                for (int i = 0; i < updateMeshJobL.StretchFactor.Length; i++)
+                {
+                    updateMeshJobL.StretchFactor[i] = updateMeshJobL.StretchFactor[i] < 1 ? updateMeshJobL.StretchFactor[i] + StretchFactorIncrease[i] : 1;
+                }
+                #endregion
+                if (updateMeshJobL.JointPositions.Length > 0) updateMeshJobHandleL = updateMeshJobL.Schedule(updateMeshJobL.BaseMeshPositions.Length, 1024);
                 #endregion
                 #region Update Mesh Job R
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobR.JointPositions.Length; i++)
                 {
-                    updateMeshJobR.JointPositions[i] = RightHandJoints[i].position;
-                    updateMeshJobR.JointRotations[i] = RightHandJoints[i].rotation;
+                    updateMeshJobR.JointPositions[i] = RJoints[i].position;
+                    updateMeshJobR.JointRotations[i] = RJoints[i].rotation;
                 }
-                //attractJob.JointPositionsR = updateMeshJobR.JointPositionsPerParticle;
                 #endregion
                 #region Update Joint Distance Moved
                 attractJob.JointDistanceMovedR = updateMeshJobR.JointDistanceMoved;
@@ -549,13 +694,70 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update PositionOffsetsIndex
                 updateMeshJobR.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
+                #region Update Stretch
+                for (int i = 0; i < updateMeshJobR.StretchFactor.Length; i++)
+                {
+                    updateMeshJobR.StretchFactor[i] = updateMeshJobR.StretchFactor[i] < 1 ? updateMeshJobR.StretchFactor[i] + StretchFactorIncrease[i] : 1;
+                }
+                #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
-                if (updateMeshJobR.JointPositions.Length > 0) updateMeshJobHandleR = updateMeshJobR.Schedule(particleSys.particleCount / 2, 1024);
+                if (updateMeshJobR.JointPositions.Length > 0) updateMeshJobHandleR = updateMeshJobR.Schedule(updateMeshJobR.BaseMeshPositions.Length, 1024);
+                #endregion
+                #region Update Mesh Job LM
+                #region Update Joint Positions
+                for (int i = 0; i < updateMeshJobLM.JointPositions.Length; i++)
+                {
+                    updateMeshJobLM.JointPositions[i] = LMJoints[i].position;
+                    updateMeshJobLM.JointRotations[i] = LMJoints[i].rotation;
+                }
+                #endregion
+                #region Update Joint Distance Moved in Attraction Job
+                attractJob.JointDistanceMovedLM = updateMeshJobLM.JointDistanceMoved;
+                #endregion
+                #region Update Mesh Positions in Attraction Job
+                attractJob.MeshPositionsLM = updateMeshJobLM.DynamicMeshPositions;
+                #endregion
+                #region Update PositionOffsetsIndex
+                updateMeshJobLM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
+                #endregion
+                #region Update Stretch
+                for (int i = 0; i < updateMeshJobLM.StretchFactor.Length; i++)
+                {
+                    //updateMeshJobLM.StretchFactor[i] = MirrorHandsPositionDistance;// updateMeshJobLM.StretchFactor[i] < 1 ? updateMeshJobLM.StretchFactor[i] + StretchFactorIncrease[i] : 1;
+                }
+                #endregion
+                if (updateMeshJobLM.JointPositions.Length > 0) updateMeshJobHandleLM = updateMeshJobLM.Schedule(updateMeshJobLM.BaseMeshPositions.Length, 1024);
+                #endregion
+                #region Update Mesh Job RM
+                #region Update Joint Positions
+                for (int i = 0; i < updateMeshJobRM.JointPositions.Length; i++)
+                {
+                    updateMeshJobRM.JointPositions[i] = RMJoints[i].position;
+                    updateMeshJobRM.JointRotations[i] = RMJoints[i].rotation;
+                }
+                #endregion
+                #region Update Joint Distance Moved
+                attractJob.JointDistanceMovedRM = updateMeshJobRM.JointDistanceMoved;
+                #endregion
+                #region Update Mesh Positions in Attraction Job
+                attractJob.MeshPositionsRM = updateMeshJobRM.DynamicMeshPositions;
+                #endregion
+                #region Update PositionOffsetsIndex
+                updateMeshJobRM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
+                #endregion
+                #region Update Stretch
+                for (int i = 0; i < updateMeshJobRM.StretchFactor.Length; i++)
+                {
+                    //updateMeshJobRM.StretchFactor[i] = MirrorHandsPositionDistance;// updateMeshJobRM.StretchFactor[i] < 1 ? updateMeshJobRM.StretchFactor[i] + StretchFactorIncrease[i] : 1;
+                }
+                #endregion
+                // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
+                if (updateMeshJobRM.JointPositions.Length > 0) updateMeshJobHandleRM = updateMeshJobRM.Schedule(updateMeshJobRM.BaseMeshPositions.Length, 1024);
                 #endregion
                 #endregion
             }
             else
-            { 
+            {
                 #region Attraction Job
                 UpdateAttractionJob();
                 attractionJobHandle = attractJob.ScheduleBatch(particleSys, 1024);
@@ -563,8 +765,8 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Previous Joint Positions in Update Mesh Job
                 for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
                 {
-                    updateMeshJobL.PrevJointPositions[i] = LeftHandJoints[i].position;
-                    updateMeshJobR.PrevJointPositions[i] = RightHandJoints[i].position;
+                    updateMeshJobL.PrevJointPositions[i] = LJoints[i].position;
+                    updateMeshJobR.PrevJointPositions[i] = RJoints[i].position;
                 }
                 #endregion
             }
@@ -581,8 +783,8 @@ public class TheOtherFactor : MonoBehaviour
     private void UpdateAttractionJob()
     {
         #region Attraction
-        attractJob.AttractionStrength =  AttractionStrength;
-        attractJob.AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength; 
+        attractJob.AttractionStrength = AttractionStrength;
+        attractJob.AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength;
         #endregion
         #region Velocity
         attractJob.VelocityLerp = VelocityLerp;
@@ -649,25 +851,38 @@ public class TheOtherFactor : MonoBehaviour
     }
     private void UpdateParticlesAttractionLR()
     {
-        Vector2 attractionVector = Vector2.one;
-        Vector2 perParticleScalingVector = Vector2.one;
+        Vector4 attractionVector = Vector4.one;
+        Vector4 perParticleScalingVector = Vector4.one;
 
-        for (int i = 0; i < attractJob.ParticlesAttractionLR.Length; i++)
+        int quarterLength = attractJob.ParticlesAttractionGroups.Length / 4;
+
+        for (int i = 0; i < attractJob.ParticlesAttractionGroups.Length; i++)
         {
-            if (i < attractJob.ParticlesAttractionLR.Length / 2)
+            if (i < quarterLength)
             {
-                attractionVector.x = ParticlesAttractionGroup1.x;
-                attractionVector.y = ParticlesAttractionGroup1.y;
-                perParticleScalingVector = new Vector2(1, PerParticleScaling[i]);
+                // First quarter
+                attractionVector = ParticlesAttractionGroup1;
+                perParticleScalingVector = new Vector4(1, PerParticleScaling[i], PerParticleScaling[i], PerParticleScaling[i]);
+            }
+            else if (i < quarterLength * 2)
+            {
+                // Second quarter
+                attractionVector = ParticlesAttractionGroup2;
+                perParticleScalingVector = new Vector4(PerParticleScaling[i], 1, PerParticleScaling[i], PerParticleScaling[i]);
+            }
+            else if (i < quarterLength * 3)
+            {
+                // Third quarter
+                attractionVector = ParticlesAttractionGroup3;
+                perParticleScalingVector = new Vector4(PerParticleScaling[i], PerParticleScaling[i], 1, PerParticleScaling[i]);
             }
             else
             {
-                attractionVector.x = ParticlesAttractionGroup2.x;
-                attractionVector.y = ParticlesAttractionGroup2.y;
-                perParticleScalingVector = new Vector2(PerParticleScaling[i], 1);
+                // Fourth quarter
+                attractionVector = ParticlesAttractionGroup4;
+                perParticleScalingVector = new Vector4(PerParticleScaling[i], PerParticleScaling[i], PerParticleScaling[i], 1);
             }
-             
-            attractJob.ParticlesAttractionLR[i] = attractionVector;
+            attractJob.ParticlesAttractionGroups[i] = attractionVector;
             attractJob.PerParticleScaling[i] = perParticleScalingVector;
         }
     }
@@ -691,25 +906,29 @@ public class TheOtherFactor : MonoBehaviour
         [ReadOnly] public float VelocityLerp;
         #endregion
         #region Attraction Scaling Per Group/Hand
-        [ReadOnly] public NativeArray<Vector2> ParticlesAttractionLR;
-        [ReadOnly] public NativeArray<Vector2> PerParticleScaling;
+        [ReadOnly] public NativeArray<Vector4> ParticlesAttractionGroups;
+        [ReadOnly] public NativeArray<Vector4> PerParticleScaling;
         #endregion
         #region Mesh
         #region Positions
         [ReadOnly] public NativeArray<Vector3> MeshPositionsL;
         [ReadOnly] public NativeArray<Vector3> MeshPositionsR;
-        //[ReadOnly] public NativeArray<Vector3> JointPositionsL;
-        //[ReadOnly] public NativeArray<Vector3> JointPositionsR;
+        [ReadOnly] public NativeArray<Vector3> MeshPositionsLM;
+        [ReadOnly] public NativeArray<Vector3> MeshPositionsRM;
         #endregion
         #region Indices
         public NativeArray<int> MeshIndicesL;
         public NativeArray<int> MeshIndicesR;
+        public NativeArray<int> MeshIndicesLM;
+        public NativeArray<int> MeshIndicesRM;
         [ReadOnly] public NativeArray<int> IndexStepSizes;
         [ReadOnly] public int IndexStepsSizeIndex;
         #endregion
         #region Joint Distance Moved
         [ReadOnly] public NativeArray<float> JointDistanceMovedL;
         [ReadOnly] public NativeArray<float> JointDistanceMovedR;
+        [ReadOnly] public NativeArray<float> JointDistanceMovedLM;
+        [ReadOnly] public NativeArray<float> JointDistanceMovedRM;
         #endregion
         #endregion
         #region Color
@@ -748,29 +967,51 @@ public class TheOtherFactor : MonoBehaviour
                 float distanceToMeshL = math.length(directionToMeshL);
 
                 Vector3 velocityL = CalculateAttractionVelocity(directionToMeshL, distanceToMeshL, AttractionExponentDivisor, AttractionStrength,
-                                                                ParticlesAttractionLR[particleIndex].x, JointDistanceMovedL[meshPosIndexL], distanceToMeshL, PerParticleScaling[particleIndex].y);
+                                                                ParticlesAttractionGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].y);
                 #endregion
                 #region Compute Attraction to Right Hand
                 int meshPosIndexR = MeshIndicesR[particleIndex];
                 MeshIndicesR[particleIndex] = (meshPosIndexR + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsR.Length]) % MeshPositionsR.Length;
-               
+
                 Vector3 meshPosR = MeshPositionsR[meshPosIndexR];
                 Vector3 directionToMeshR = meshPosR - particlePos;
                 float distanceToMeshR = math.length(directionToMeshR);
 
                 Vector3 velocityR = CalculateAttractionVelocity(directionToMeshR, distanceToMeshR, AttractionExponentDivisor, AttractionStrength,
-                                                                ParticlesAttractionLR[particleIndex].y, JointDistanceMovedR[meshPosIndexR], distanceToMeshR, PerParticleScaling[particleIndex].x);
+                                                                ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedR[meshPosIndexR], PerParticleScaling[particleIndex].x);
+                #endregion
+                #region Compute Attraction to RLeft Hand
+                int meshPosIndexLM = MeshIndicesLM[particleIndex];
+                MeshIndicesLM[particleIndex] = (meshPosIndexLM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsLM.Length]) % MeshPositionsLM.Length;
+
+                Vector3 meshPosLM = MeshPositionsLM[meshPosIndexLM];
+                Vector3 directionToMeshLM = meshPosLM - particlePos;
+                float distanceToMeshLM = math.length(directionToMeshLM);
+
+                Vector3 velocityLM = CalculateAttractionVelocity(directionToMeshLM, distanceToMeshLM, AttractionExponentDivisor, AttractionStrength,
+                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedLM[meshPosIndexLM], PerParticleScaling[particleIndex].w);
+                #endregion
+                #region Compute Attraction to RRight Hand
+                int meshPosIndexRM = MeshIndicesRM[particleIndex];
+                MeshIndicesRM[particleIndex] = (meshPosIndexRM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsRM.Length]) % MeshPositionsRM.Length;
+
+                Vector3 meshPosRM = MeshPositionsRM[meshPosIndexRM];
+                Vector3 directionToMeshRM = meshPosRM - particlePos;
+                float distanceToMeshRM = math.length(directionToMeshRM);
+
+                Vector3 velocityRM = CalculateAttractionVelocity(directionToMeshRM, distanceToMeshRM, AttractionExponentDivisor, AttractionStrength,
+                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedRM[meshPosIndexRM], PerParticleScaling[particleIndex].z);
                 #endregion
 
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
-                velocities[particleIndex] = math.lerp(velocities[particleIndex], velocityL + velocityR, VelocityLerp);
+                velocities[particleIndex] = math.lerp(velocities[particleIndex], velocityL + velocityR + velocityLM + velocityRM, VelocityLerp);
                 #endregion
                 #region Size
-                sizes[i] =  ComputeParticleSize(distanceToMeshL, distanceToMeshR, DistanceForMinSize, ParticleSizeMinMax, SizeLerp, sizes[particleIndex]);// math.lerp(sizes[i], targetSize, SizeLerp);
+                sizes[i] = ComputeParticleSize(distanceToMeshL, distanceToMeshR, distanceToMeshLM, distanceToMeshRM, DistanceForMinSize, ParticleSizeMinMax, SizeLerp, sizes[particleIndex]);// math.lerp(sizes[i], targetSize, SizeLerp);
                 #endregion
                 #region Color
-                colors[particleIndex] = ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex < particles.count / 2 ? 1 : 2, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
+                colors[particleIndex] = ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex, particles.count, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
                 #endregion
                 #endregion
             }
@@ -778,21 +1019,23 @@ public class TheOtherFactor : MonoBehaviour
         #region Functions
         #region Calculate Attraction Velocity
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector3 CalculateAttractionVelocity(Vector3 direction, float distance, float exponentAttractionDivisor, float attractionStrength,
-                                                           float perGroupHandScalor, float jointDistanceMoved, float distanceToMesh, float perParticleScaling)
+        private static Vector3 CalculateAttractionVelocity(Vector3 direction, float distance, float attractionExponentDivisor, float attractionStrength,
+                                                           float perGroupHandScalor, float jointDistanceMoved, float perParticleScaling)
         {
             // Calculate the exponent for the Gaussian distribution based on the distance and attraction strength
-            float exponent = -math.lengthsq(direction) /  exponentAttractionDivisor;
+            float exponent = -math.lengthsq(direction) / attractionExponentDivisor;
 
             // Apply the Gaussian distribution to calculate the attraction force
             float attraction = attractionStrength * math.exp(exponent);
-            attraction *= 1 - distance;
+            //attraction *= math.max(.1f, 1 - distance);
+            attraction *= math.lerp(1, 0f, distance);
 
             Vector3 normDirection = math.normalize(direction);
-            
+
             Vector3 velocity = normDirection * attraction;
 
-            velocity *= math.max(distanceToMesh * 5, math.min(jointDistanceMoved * 1000 * distanceToMesh * perParticleScaling, 1));
+            //velocity *= math.max(distance * 5, math.min(jointDistanceMoved * 1000 * distance * perParticleScaling, 1));
+            //velocity *= math.max(.01f, math.min(jointDistanceMoved * 1000, 1));
 
             velocity *= perGroupHandScalor;
 
@@ -803,33 +1046,70 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Compute Particle Color
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Color ComputeParticleColor(Vector3 velocity, Vector4 baseColor, int particleGroup, int useDebugColors, float alpha, float colorLerp, Color currentColor)
+        private static Color ComputeParticleColor(Vector3 velocity, Vector4 baseColor, int particleIndex, int totalParticles, int useDebugColors, float alpha, float colorLerp, Color currentColor)
         {
-            Color debugColor = particleGroup == 1 ? Color.green : Color.red;
+            Color newColor = new Color();
 
-            float minColorValue = .1f;
+            if (useDebugColors != 0)
+            {
+                // Calculate the group size
+                int groupSize = totalParticles / 4;
 
-            // Scale color noise by the non-normalized velocity components
-            float rNoise = math.lerp(velocity.x, baseColor.x, baseColor.w) + minColorValue;
-            float gNoise = math.lerp(velocity.y, baseColor.y, baseColor.w) + minColorValue;
-            float bNoise = math.lerp(velocity.z, baseColor.z, baseColor.w) + minColorValue;
+                // Determine the particle group by dividing the particle index by the group size
+                int particleGroup = particleIndex / groupSize;
 
-            // Create the final color
-            Color velocityColor = new Color(rNoise, gNoise, bNoise, 1);
+                // Clamp the particleGroup to max value of 3, in case totalParticles is not perfectly divisible by 4
+                particleGroup = math.min(particleGroup, 3);
 
-            Color combinedColor = useDebugColors == 0 ? velocityColor : debugColor;
-            combinedColor.a = alpha;
+                // Assign color based on the particle group
+                switch (particleGroup)
+                {
+                    case 0:
+                        newColor = Color.green;
+                        break;
+                    case 1:
+                        newColor = Color.red;
+                        break;
+                    case 2:
+                        newColor = Color.blue;
+                        break;
+                    case 3:
+                        newColor = Color.yellow;
+                        break;
+                    default:
+                        newColor = Color.white; // Fallback color, should not be reached
+                        break;
+                }
+            }
+            else
+            {
+                float minColorValue = .1f;
 
-            Color finalColor = Color.Lerp(currentColor, combinedColor, colorLerp);
+                // Scale color noise by the non-normalized velocity components
+                float rNoise = math.lerp(velocity.x, baseColor.x, baseColor.w) + minColorValue;
+                float gNoise = math.lerp(velocity.y, baseColor.y, baseColor.w) + minColorValue;
+                float bNoise = math.lerp(velocity.z, baseColor.z, baseColor.w) + minColorValue;
+
+                // Create the final color
+                newColor = new Color(rNoise, gNoise, bNoise, 1);
+            }
+            //int particleGroup = particleIndex < totalParticles / 2 ? 1 : 2;
+            //Color debugColor = particleGroup == 1 ? Color.green : Color.red;
+
+            newColor.a = alpha;
+
+            Color finalColor = Color.Lerp(currentColor, newColor, colorLerp);
 
             return finalColor;
         }
         #endregion
         #region Compute Particle Size
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static float ComputeParticleSize(float distanceToMeshL, float distanceToMeshR, float distanceForMinSize, Vector2 particleSizeMinMax, float sizeLerp, float currentSize)
+        private static float ComputeParticleSize(float distanceToMeshL, float distanceToMeshR, float distanceToMeshLM, float distanceToMeshRM, float distanceForMinSize, Vector2 particleSizeMinMax, float sizeLerp, float currentSize)
         {
             float leastDistance = math.min(distanceToMeshL, distanceToMeshR);
+            leastDistance = math.min(leastDistance, distanceToMeshLM);
+            leastDistance = math.min(leastDistance, distanceToMeshRM);
 
             // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
             float normalizedDistance = math.clamp(leastDistance / distanceForMinSize, 0f, 1f);
@@ -855,6 +1135,7 @@ public class TheOtherFactor : MonoBehaviour
     [BurstCompile]
     struct UpdateMeshJob : IJobParallelFor
     {
+        #region Variables
         #region Joints
         // Read-only arrays for joint positions and rotations, and a map from joint to particle
         [ReadOnly] public NativeArray<Vector3> JointPositions;
@@ -874,6 +1155,10 @@ public class TheOtherFactor : MonoBehaviour
         [ReadOnly] public NativeArray<float> MeshPositionOffsets;
         [ReadOnly] public int MeshPositionOffsetsIndex;
         #endregion
+        #endregion
+        #region Stretch
+        [ReadOnly] public NativeArray<float> StretchFactor;
+        #endregion
         public void Execute(int index)
         {
             // Calculate position offset for current particle based on noise array
@@ -887,22 +1172,26 @@ public class TheOtherFactor : MonoBehaviour
             Quaternion jointRotation = JointRotations[jointIndex];
 
             // Compute the final world position for the particle and store it
-            DynamicMeshPositions[index] = ComputeWorldPosition(jointPosition, jointRotation, baseMeshPosition, positionOffset);
+            Vector3 DynamicMeshPosition = ComputeWorldPosition(jointPosition, jointRotation, baseMeshPosition, positionOffset);
+            // Stretch the dynamic pseudo mesh
+            //DynamicMeshPositions[index] += (TranslationAxis * math.max(0f, StretchFactor[index]));
+            float z = math.lerp(DynamicMeshPosition.z, -DynamicMeshPosition.z, StretchFactor[index]);
+            DynamicMeshPositions[index] = new Vector3(DynamicMeshPosition.x, DynamicMeshPosition.y, z);
             JointDistanceMoved[index] = math.length(prevJointPosition - jointPosition);
             //JointPositionsPerParticle[index] = jointPosition;
         }
         #region Compute World Position
         // Inline method for computing world position of a particle
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static Vector3 ComputeWorldPosition(Vector3 jointPosition, Quaternion jointRotation, Vector3 baseMeshPosition, float positionNoise)
+        private static Vector3 ComputeWorldPosition(Vector3 jointPosition, Quaternion jointRotation, Vector3 baseMeshPosition, float positionOffset)
         {
             // Calculate the world position based on joint data and relative position
-            Vector3 worldPosition = jointPosition + (Vector3)math.mul(jointRotation, baseMeshPosition);
+            Vector3 dynamicMeshPosition = jointPosition + (Vector3)math.mul(jointRotation, baseMeshPosition);
 
             // Apply noise to the world position to interpolate between joint and pseudo mesh position
-            worldPosition = worldPosition + (jointPosition - worldPosition) * positionNoise;
+            dynamicMeshPosition = dynamicMeshPosition + (jointPosition - dynamicMeshPosition) * positionOffset;
 
-            return worldPosition;
+            return dynamicMeshPosition;
         }
         #endregion
     }

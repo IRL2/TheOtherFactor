@@ -29,12 +29,14 @@ public class FactorState
     public float VelocityLerp;
     #endregion
     #region Attraction Scaling Per Group/Hand
-    public Vector2 ParticlesAttractionGroup1;
-    public Vector2 ParticlesAttractionGroup2;
+    public Vector4 ParticlesAttractionGroup1;
+    public Vector4 ParticlesAttractionGroup2;
+    public Vector4 ParticlesAttractionGroup3;
+    public Vector4 ParticlesAttractionGroup4;
     #endregion
     #region Per Particle Scaling
     public Vector2 PerParticleScalingMinMax;
-    public float PerParticleScalingPowerFactor;
+    public float PerParticleScalingExponent;
     #endregion
     #region Position Offsets
     public Vector2 PositionOffsetMinMax;
@@ -50,6 +52,10 @@ public class FactorState
     public float HeartbeatSpeed;
     public bool UseHeartbeat;
     public Vector2 AlphaMinMax;
+    #endregion
+    #region Stretch
+    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
     #endregion
     #endregion
 }
@@ -101,14 +107,18 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #region Attraction Scaling Per Group/Hand
     [Header("Attraction Scaling Per Group/Hand")]
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
-    public Vector2 ParticlesAttractionGroup1 = Vector2.one;
+    public Vector4 ParticlesAttractionGroup1 = Vector4.one;
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
-    public Vector2 ParticlesAttractionGroup2 = Vector2.one;
+    public Vector4 ParticlesAttractionGroup2 = Vector4.one;
+    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
+    public Vector4 ParticlesAttractionGroup3 = Vector4.one;
+    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
+    public Vector4 ParticlesAttractionGroup4 = Vector4.one;
     #endregion
     #region Per Particle Scaling
     [Header("Per Particle Scaling")]
     public Vector2 PerParticleScalingMinMax = new Vector2(0f, 1f);
-    public float PerParticleScalingPowerFactor = .1f;
+    public float PerParticleScalingExponent = .1f;
     #endregion
     #region Position Offsets
     // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
@@ -131,6 +141,11 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public float HeartbeatSpeed = 1f;
     public bool UseHeartbeat = true;
     public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
+    #endregion
+    #region Stretch
+    [Header("Stretch")]
+    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
     #endregion
     #endregion
     #region Utility
@@ -201,10 +216,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         #region Attraction Scaling Per Group/Hand
         tof.ParticlesAttractionGroup1 = ParticlesAttractionGroup1;
         tof.ParticlesAttractionGroup2 = ParticlesAttractionGroup2;
+        tof.ParticlesAttractionGroup3 = ParticlesAttractionGroup3;
+        tof.ParticlesAttractionGroup4 = ParticlesAttractionGroup4;
         #endregion
         #region Per Particle Scaling
         tof.PerParticleScalingMinMax = PerParticleScalingMinMax;
-        tof.PerParticleScalingPowerFactor = PerParticleScalingPowerFactor;
+        tof.PerParticleScalingExponent = PerParticleScalingExponent;
         #endregion
         #region Position Offsets
         tof.PositionOffsetMinMax = PositionOffsetMinMax;
@@ -220,6 +237,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.HeartbeatSpeed = HeartbeatSpeed;
         tof.UseHeartbeat = UseHeartbeat;
         tof.AlphaMinMax = AlphaMinMax;
+        #endregion
+        #region Stretch
+        tof.StretchFactorMinMax = StretchFactorMinMax;
+        tof.StretchFactorExponent = StretchFactorExponent;
         #endregion
     }
     public void SavePreset(string name)
@@ -249,10 +270,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #region Attraction Scaling Per Group/Hand
             ParticlesAttractionGroup1 = ParticlesAttractionGroup1,
             ParticlesAttractionGroup2 = ParticlesAttractionGroup2,
+            ParticlesAttractionGroup3 = ParticlesAttractionGroup3,
+            ParticlesAttractionGroup4 = ParticlesAttractionGroup4,
             #endregion
             #region Per Particle Scaling
             PerParticleScalingMinMax = PerParticleScalingMinMax,
-            PerParticleScalingPowerFactor = PerParticleScalingPowerFactor,
+            PerParticleScalingExponent = PerParticleScalingExponent,
             #endregion
             #region Position Offsets
             PositionOffsetMinMax = PositionOffsetMinMax,
@@ -269,12 +292,16 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             UseHeartbeat = UseHeartbeat,
             AlphaMinMax = AlphaMinMax,
             #endregion
+            #region Stretch
+            StretchFactorMinMax = StretchFactorMinMax,
+            StretchFactorExponent = StretchFactorExponent,
+            #endregion
         };
-        for(int i = 0; i < presets.Count; i++)
+        for (int i = 0; i < presets.Count; i++)
         {
             if (presets[i].Name == name)
             {
-                presets[i] = newState; 
+                presets[i] = newState;
                 foundExistingPresetWithSameName = true;
                 break;
             }
@@ -314,7 +341,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     {
         if (!Application.isPlaying || state.RestartEngine)
         {
-            if(Application.isPlaying) tof.StopTheOtherFactor();
+            if (Application.isPlaying) tof.StopTheOtherFactor();
             #region Particles
             tof.ParticlesPerHand = state.ParticlesPerHand;
             ParticlesPerHand = state.ParticlesPerHand;
@@ -322,8 +349,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #region Per Particle Scaling
             tof.PerParticleScalingMinMax = state.PerParticleScalingMinMax;
             PerParticleScalingMinMax = state.PerParticleScalingMinMax;
-            tof.PerParticleScalingPowerFactor = state.PerParticleScalingPowerFactor;
-            PerParticleScalingPowerFactor = state.PerParticleScalingPowerFactor;
+            tof.PerParticleScalingExponent = state.PerParticleScalingExponent;
+            PerParticleScalingExponent = state.PerParticleScalingExponent;
             #endregion
             #region Position Offsets
             tof.PositionOffsetMinMax = state.PositionOffsetMinMax;
@@ -333,8 +360,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             tof.IndexStepSizeMinMax = state.IndexStepSizeMinMax;
             IndexStepSizeMinMax = state.IndexStepSizeMinMax;
             #endregion
-            if(Application.isPlaying) tof.StartTheOtherFactor();
+            if (Application.isPlaying) tof.StartTheOtherFactor();
         }
+        tof.DisplayOculusHands = state.DisplayOculusHands;
+        DisplayOculusHands = state.DisplayOculusHands;
         #region Particles
         tof.ParticleSizeMinMax = state.ParticleSizeMinMax;
         ParticleSizeMinMax = state.ParticleSizeMinMax;
@@ -358,6 +387,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         ParticlesAttractionGroup1 = state.ParticlesAttractionGroup1;
         tof.ParticlesAttractionGroup2 = state.ParticlesAttractionGroup2;
         ParticlesAttractionGroup2 = state.ParticlesAttractionGroup2;
+        tof.ParticlesAttractionGroup3 = state.ParticlesAttractionGroup3;
+        ParticlesAttractionGroup3 = state.ParticlesAttractionGroup3;
+        tof.ParticlesAttractionGroup4 = state.ParticlesAttractionGroup4;
+        ParticlesAttractionGroup4 = state.ParticlesAttractionGroup4;
         #endregion
         #region Color
         tof.UseDebugColors = state.UseDebugColors;
@@ -374,12 +407,18 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         UseHeartbeat = state.UseHeartbeat;
         tof.AlphaMinMax = state.AlphaMinMax; AlphaMinMax = state.AlphaMinMax;
         #endregion
+        #region Stretch
+        tof.StretchFactorMinMax = state.StretchFactorMinMax;
+        tof.StretchFactorExponent = state.StretchFactorExponent;
+        StretchFactorMinMax = state.StretchFactorMinMax;
+        StretchFactorExponent = state.StretchFactorExponent;
+        #endregion
 
         RestartEngine = state.RestartEngine;
         currentPresetName = state.Name;
 
         canvasMover.SetCanvasPosition();
-        if(DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
+        if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
     }
     public void UpdatePresetNameList()
     {
@@ -460,7 +499,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         // Per Particle Scaling Section
         sb.AppendLine("\nPer Particle Scaling:");
         sb.AppendLine($"Per Particle Scaling Min/Max: ({PerParticleScalingMinMax.x}, {PerParticleScalingMinMax.y})");
-        sb.AppendLine($"Per Particle Scaling Power Factor: {PerParticleScalingPowerFactor}");
+        sb.AppendLine($"Per Particle Scaling Power Factor: {PerParticleScalingExponent}");
 
         // Position Offsets Section
         sb.AppendLine("\nPosition Offsets:");

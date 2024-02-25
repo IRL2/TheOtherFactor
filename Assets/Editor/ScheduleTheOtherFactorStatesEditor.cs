@@ -6,7 +6,7 @@ using System.Collections.Generic;
 public class ScheduleTheOtherFactorStatesEditor : Editor
 {
     private string presetName = "New Preset";
-    private string applyPresetName = "Default";
+    private string applyPresetName = "";
     private int applyPresetIndex = 0;
 
     public override void OnInspectorGUI()
