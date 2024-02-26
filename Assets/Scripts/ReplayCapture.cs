@@ -1,12 +1,12 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.Collections;
-using Unity.Jobs;
 
 public class ReplayCapture : MonoBehaviour
 {
+    #region Variables
     public PseudoMeshCreator meshCreator; // Reference to the PseudoMeshCreator script
+    public TheOtherFactor tof;
     public float recordRate = 0.1f; // Rate at which to record positions, in seconds
     public float replayDuration = 5f; // Duration of the replay memory, in seconds
 
@@ -20,7 +20,7 @@ public class ReplayCapture : MonoBehaviour
 
     private int memoryCapacity; // How many positions/rotations we can store based on recordRate and replayDuration
     private bool memoryIsFull = false; // Flag to indicate when the memory is initially populated
-
+    #endregion
 
     void Start()
     {
@@ -37,7 +37,6 @@ public class ReplayCapture : MonoBehaviour
         // Start recording input transforms
         StartCoroutine(RecordTransformData());
     }
-
     void InitializeOutputListsAndMemory()
     {
         foreach (Transform child in transform)
@@ -57,7 +56,6 @@ public class ReplayCapture : MonoBehaviour
             rotationsMemory[child] = new List<Quaternion>(memoryCapacity);
         }
     }
-
     IEnumerator RecordTransformData()
     {
         while (true)
@@ -75,7 +73,6 @@ public class ReplayCapture : MonoBehaviour
             yield return new WaitForSeconds(recordRate);
         }
     }
-
     void UpdateMemory(Transform outputTransform, Transform jointTransform)
     {
         Vector3 position = jointTransform.position;
@@ -102,11 +99,13 @@ public class ReplayCapture : MonoBehaviour
             rotationList.RemoveAt(0);
             positionList.Add(position);
             rotationList.Add(rotation);
-            ReplayMovement(leftHandJointsOutput, 0);
-            ReplayMovement(rightHandJointsOutput, 0);
+            if (!tof.RealTimeMirror)
+            {
+                ReplayMovement(leftHandJointsOutput, 0);
+                ReplayMovement(rightHandJointsOutput, 0);
+            }
         }
     }
-
     void ReplayMovement(List<Transform> outputTransforms, int index)
     {
         foreach (var outputTransform in outputTransforms)
@@ -124,11 +123,10 @@ public class ReplayCapture : MonoBehaviour
                 Quaternion mirroredRotation = MirrorRotation(rotationList[index], Vector3.up);
 
                 outputTransform.position = mirroredPosition;
-                outputTransform.rotation = mirroredRotation;
+                outputTransform.rotation = rotationList[index];// mirroredRotation;
             }
         }
     }
-
     // Function to mirror a rotation around a given axis
     Quaternion MirrorRotation(Quaternion rotation, Vector3 axis)
     {

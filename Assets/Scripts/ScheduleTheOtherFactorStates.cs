@@ -4,12 +4,12 @@ using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 [Serializable]
 public class FactorState
 {
     #region State Management Related
+    public bool RealTimeMirror;
     public bool RestartEngine;
     public string Name;
     #endregion
@@ -24,6 +24,8 @@ public class FactorState
     #endregion
     #region Attraction
     public float AttractionStrength;
+    public float DistForMinAtt;
+    public Vector2 AttByDistRange;
     #endregion
     #region Velocity
     public float VelocityLerp;
@@ -80,6 +82,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     private string currentPresetName;
     #endregion
     #region Preset Variables
+    public bool RealTimeMirror;
     public bool RestartEngine = false;
     public bool DisplayOculusHands = false;
     #region Particles
@@ -98,6 +101,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #region Attraction
     [Header("Attraction")]
     public float AttractionStrength = 1f;
+    public float DistForMinAtt = 1f;
+    public Vector2 AttByDistRange = new Vector2(0f, 1f);
     #endregion
     #region Velocity
     [Header("Velocity")]
@@ -200,6 +205,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     }
     private void UpdateTOF()
     {
+        tof.RealTimeMirror = RealTimeMirror;
+        tof.DisplayOculusHands = DisplayOculusHands;
         #region Particles
         tof.ParticlesPerHand = ParticlesPerHand;
         tof.ParticleSizeMinMax = ParticleSizeMinMax;
@@ -209,6 +216,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         #endregion
         #region Attraction Strength
         tof.AttractionStrength = AttractionStrength;
+        tof.DistForMinAtt = DistForMinAtt;
+        tof.AttByDistRange = AttByDistRange;
         #endregion
         #region Velocity
         tof.VelocityLerp = VelocityLerp;
@@ -253,6 +262,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             RestartEngine = RestartEngine,
             Name = name,
             #endregion
+            RealTimeMirror = RealTimeMirror,
             DisplayOculusHands = DisplayOculusHands,
             #region Particles
             ParticlesPerHand = ParticlesPerHand,
@@ -263,6 +273,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #endregion
             #region Attraction
             AttractionStrength = AttractionStrength,
+            DistForMinAtt = DistForMinAtt,
+            AttByDistRange = AttByDistRange,
             #endregion
             #region Velocity
             VelocityLerp = VelocityLerp,
@@ -362,6 +374,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #endregion
             if (Application.isPlaying) tof.StartTheOtherFactor();
         }
+        tof.RealTimeMirror = state.RealTimeMirror;
+        RealTimeMirror = state.RealTimeMirror;
         tof.DisplayOculusHands = state.DisplayOculusHands;
         DisplayOculusHands = state.DisplayOculusHands;
         #region Particles
@@ -377,6 +391,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         #region Attraction Strength
         tof.AttractionStrength = state.AttractionStrength;
         AttractionStrength = state.AttractionStrength;
+        tof.DistForMinAtt = state.DistForMinAtt;
+        DistForMinAtt = state.DistForMinAtt;
+        tof.AttByDistRange = state.AttByDistRange;
+        AttByDistRange = state.AttByDistRange;
         #endregion
         #region Velocity
         tof.VelocityLerp = state.VelocityLerp;
