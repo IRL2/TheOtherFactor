@@ -321,7 +321,8 @@ public class TheOtherFactor : MonoBehaviour
 
         // Both hands are now within the target distance from the HMD
         mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * mirrorDistance;
-        mirrorPlaneNormal = Vector3.fwd;// mainCamera.transform.forward;
+        Vector3 forwardHorizontal = new Vector3(mainCamera.transform.forward.x, 0, mainCamera.transform.forward.z).normalized;
+        mirrorPlaneNormal = forwardHorizontal;
     }
     #endregion
     #region Emit Particles
