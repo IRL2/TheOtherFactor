@@ -14,10 +14,6 @@ public class TheOtherFactor : MonoBehaviour
     #region Variables
     #region Inspector Variables
     public bool DisplayOculusHands = false;
-    public bool RealTimeMirror = false;
-    public float mirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
-    private Vector3 mirrorPlanePosition;
-    private Vector3 mirrorPlaneNormal;
     #region Particles
     [Header("Particles")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
@@ -50,24 +46,40 @@ public class TheOtherFactor : MonoBehaviour
     public Vector4 ParticlesAttractionGroup2 = Vector4.one;
     public Vector4 ParticlesAttractionGroup3 = Vector4.one;
     public Vector4 ParticlesAttractionGroup4 = Vector4.one;
-    #endregion
     #region Per Particle Scaling
     [Header("Per Particle Scaling")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Vector2 PerParticleScalingMinMax = new Vector2(0f, 1f);
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public float PerParticleScalingExponent = .1f;
+    public string PerParticleScalingGroups = "xyzw";
+    #endregion
     #endregion
     #region Position Offsets
     // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
     [Header("Position Offsets")]
     [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
     public Vector2 PositionOffsetMinMax = new Vector2(0f, .7f);
+    #region Joint Mirror
+    [Header("Joint Mirror")]
+    public bool RealTimeMirror = false;
+    public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
+    private Vector3 mirrorPlanePosition;
+    private Vector3 mirrorPlaneNormal;
+    #endregion
+    #region Stretch
+    [Header("Stretch")]
+    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
+    public float StretchMax = 1f;
+    private float[] StretchFactorIncrease;
+    private Vector3 stretchPlaneNormal;
+    #endregion
     #endregion
     #region Index Step Size
     [Header("Index Step Size")]
     [Tooltip("The min and max size step a particle can take in the array that holds all mesh positions. 0-0 = particles stick to one position. 1-1 = particles always progress 1 position each update. 0-2 = particles might stay in place, move ahead one position or 2 positions in one update.")]
-    public Vector2 IndexStepSizeMinMax = new Vector2(0, 2);
+    public Vector2 IndexStepSizeMinMax = Vector2.zero;
     #endregion
     #region Color
     [Header("Color")]
@@ -81,12 +93,6 @@ public class TheOtherFactor : MonoBehaviour
     public bool UseHeartbeat = true;
     public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
     #endregion
-    #region Stretch
-    [Header("Stretch")]
-    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
-    private float[] StretchFactorIncrease;
-    #endregion
     #endregion
     #region Internal Variables
     private ParticleSystem particleSys;
@@ -97,10 +103,17 @@ public class TheOtherFactor : MonoBehaviour
     #region Attraction Job
     #region Job Handle
     private AttractionJob attractJob;
-    private JobHandle attractionJobHandle;
+    private JobHandle attractJobHandle;
+    #endregion
+    #region 
+    private Vector2 LastIndexStepSizeMinMax = Vector2.zero;
     #endregion
     #region Per Particle Scaling
     private float[] PerParticleScaling;
+    private Vector2 LastPerParticleScalingMinMax = Vector2.zero;
+    #endregion
+    #region Stretch
+    private Vector2 LastStretchFactorMinMax = new Vector2(0f, 1f);
     #endregion
     #endregion
     #region World Positions Jobs
@@ -119,6 +132,7 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Position Offsets
     private int MeshPositionOffsetsIndex = 0;
+    private Vector2 LastPositionOffsetMinMax = Vector2.zero;
     #endregion
     #endregion
     #endregion
@@ -226,7 +240,7 @@ public class TheOtherFactor : MonoBehaviour
     public async void StartTheOtherFactor()
     {
         gameObject.SetActive(true);
-        await InitializeParticlesCoroutine();
+        await InitializeCoroutine();
     }
     public void StopTheOtherFactor()
     {
@@ -234,29 +248,16 @@ public class TheOtherFactor : MonoBehaviour
         this.gameObject.SetActive(false);
     }
     #endregion
-    private async Task InitializeParticlesCoroutine()
+    private async Task InitializeCoroutine()
     {
         #region Fetch Pseudo Mesh
         FetchPseudoMesh();
         await Task.Yield();
-        #endregion
-        #region Initialze Runtime Arrays
-        InitializePerParticleScalingArray();
+        // somehow it needs this two times, no idea why
         await Task.Yield();
         #endregion
         #region Wait For Hands Close To HMD
         await WaitForHandsCloseToHMD(.4f);
-        #endregion
-        #region Stretch
-        // Compute the position in front of the camera
-        //CenterPosition = Camera.main.transform.position + Camera.main.transform.forward * CenterPositionDistance;
-        StretchFactorIncrease = new float[ParticlesPerHand];
-        for (int i = 0; i < StretchFactorIncrease.Length; i++)
-        {
-            float linearRandom = UnityEngine.Random.Range(StretchFactorMinMax.x, StretchFactorMinMax.y);
-            StretchFactorIncrease[i] = Mathf.Pow(linearRandom, StretchFactorExponent);
-            //StretchFactorIncrease[i] = UnityEngine.Random.Range(StretchFactorMinMax.x, StretchFactorMinMax.y);
-        }
         #endregion
         #region Emit Particles
         EmitParticles();
@@ -279,18 +280,6 @@ public class TheOtherFactor : MonoBehaviour
         RMJoints = replay.rightHandJointsOutput;
         (LeftHandJointIndices, LeftHandRelativePositions) = PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "left");// PseudoMeshCreator.LeftHandRelativePositions;
         (RightHandJointIndices, RightHandRelativePositions) = PseudoMeshCreator.ResizeListsPreservingPercentages(ParticlesPerHand, "right");// PseudoMeshCreator.LeftHandRelativePositions;       
-    }
-    #endregion
-    #region Initialize Per Particle Scaling Array
-    private void InitializePerParticleScalingArray()
-    {
-        int totalParticles = ParticlesPerHand * 2;
-        PerParticleScaling = new float[totalParticles];
-        for (int i = 0; i < totalParticles; i++)
-        {
-            float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
-            PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingExponent);
-        }
     }
     #endregion
     # region Wait For Hands Close To HMD
@@ -320,8 +309,11 @@ public class TheOtherFactor : MonoBehaviour
         }
 
         // Both hands are now within the target distance from the HMD
-        mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * mirrorDistance;
+
         Vector3 forwardHorizontal = new Vector3(mainCamera.transform.forward.x, 0, mainCamera.transform.forward.z).normalized;
+        stretchPlaneNormal = forwardHorizontal;
+
+        mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * MirrorDistance;
         mirrorPlaneNormal = forwardHorizontal;
     }
     #endregion
@@ -339,25 +331,24 @@ public class TheOtherFactor : MonoBehaviour
         };
 
         Camera mainCamera = Camera.main;
-        // Find the specific joints in the arrays
-        var leftMiddle1Joint = mainCamera.transform.position + mainCamera.transform.forward * mirrorDistance;// LMJoints[7].position - LJoints[7].position;// LJoints.FirstOrDefault(j => j.name == "b_l_middle1");
-        var rightMiddle1Joint = mainCamera.transform.position + mainCamera.transform.forward * mirrorDistance;// RJoints.FirstOrDefault(j => j.name == "b_r_middle1");
+        var leftMiddle1Joint = LJoints.FirstOrDefault(j => j.name == "b_l_middle1");
+        var rightMiddle1Joint = RJoints.FirstOrDefault(j => j.name == "b_r_middle1");
 
         if (leftMiddle1Joint != null && rightMiddle1Joint != null)
         {
-            float emissionRadius = 1f; // Radius of the sphere around the hand joints
+            float emissionRadius = .1f; // Radius of the sphere around the hand joints
 
             // Emit particles around the left middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                emitParams.position = leftMiddle1Joint + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                emitParams.position = leftMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSys.Emit(emitParams, 1);
             }
 
             // Emit particles around the right middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                emitParams.position = rightMiddle1Joint + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                emitParams.position = rightMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSys.Emit(emitParams, 1);
             }
         }
@@ -393,10 +384,6 @@ public class TheOtherFactor : MonoBehaviour
             MeshIndicesRR[i] = Mathf.RoundToInt(UnityEngine.Random.Range(0, ParticlesPerHand));
         }
         NativeArray<int> IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
-        for (int i = 0; i < totalParticles; i++)
-        {
-            IndexStepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
-        }
         #endregion
         #region Joint Distance Moved
         NativeArray<float> a_JointDistanceMovedL = new NativeArray<float>(totalParticles, Allocator.Persistent);
@@ -459,10 +446,6 @@ public class TheOtherFactor : MonoBehaviour
         #region Update Mesh Jobs
         #region World Position Offsets
         NativeArray<float> MeshPositionOffsets = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
-        for (int i = 0; i < ParticlesPerHand; i++)
-        {
-            MeshPositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(PositionOffsetMinMax.x, PositionOffsetMinMax.y));
-        }
         #endregion
         #region Update Mesh Job L
         #region Joints
@@ -475,7 +458,6 @@ public class TheOtherFactor : MonoBehaviour
             JointToParticleMapL[i] = LeftHandJointIndices[i];
         }
         NativeArray<float> JointDistanceMovedL = new NativeArray<float>(totalParticles, Allocator.Persistent);
-        //NativeArray<Vector3> JointPositionsPerParticleL = new NativeArray<Vector3>(totalParticles, Allocator.Persistent);
         #endregion
         #region Pseudo Mesh
         NativeArray<Vector3> BaseMeshPositionsL = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
@@ -491,7 +473,6 @@ public class TheOtherFactor : MonoBehaviour
         {
             StretchFactorL[i] = 0;
         }
-
         #endregion
         updateMeshJobL = new UpdateMeshJob
         {
@@ -501,7 +482,6 @@ public class TheOtherFactor : MonoBehaviour
             JointRotations = JointRotationsL,
             JointToParticleMap = JointToParticleMapL,
             JointDistanceMoved = JointDistanceMovedL,
-            //JointPositionsPerParticle = JointPositionsPerParticleL,
             #endregion
             #region Pseudo Mesh
             BaseMeshPositions = BaseMeshPositionsL,
@@ -513,6 +493,7 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Stretch
             StretchFactor = StretchFactorL,
+            StretchPlaneNormal = stretchPlaneNormal,
             #endregion
         };
         #endregion
@@ -562,6 +543,7 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Stretch
             StretchFactor = StretchFactorR,
+            StretchPlaneNormal = stretchPlaneNormal,
             #endregion
         };
         #endregion
@@ -575,13 +557,12 @@ public class TheOtherFactor : MonoBehaviour
         #region Pseudo Mesh
         NativeArray<Vector3> DynamicMeshPositionsML = new NativeArray<Vector3>(ParticlesPerHand, Allocator.Persistent);
         #endregion
-        #region StretchRL
+        #region StretchLM
         NativeArray<float> StretchFactorLM = new NativeArray<float>(ParticlesPerHand, Allocator.Persistent);
         for (int i = 0; i < StretchFactorLM.Length; i++)
         {
             StretchFactorLM[i] = 0;
         }
-
         #endregion
         updateMeshJobLM = new UpdateMeshJob
         {
@@ -602,6 +583,7 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Stretch
             StretchFactor = StretchFactorLM,
+            StretchPlaneNormal = stretchPlaneNormal,
             #endregion
         };
         #endregion
@@ -641,6 +623,7 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #region Stretch
             StretchFactor = StretchFactorRM,
+            StretchPlaneNormal = stretchPlaneNormal,
             #endregion
         };
         #endregion
@@ -651,19 +634,40 @@ public class TheOtherFactor : MonoBehaviour
     #region Runtime Updates
     void OnParticleUpdateJobScheduled()
     {
-        if (RunJobs && attractionJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted && updateMeshJobHandleLM.IsCompleted && updateMeshJobHandleRM.IsCompleted)
+        if (RunJobs && attractJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted && updateMeshJobHandleLM.IsCompleted && updateMeshJobHandleRM.IsCompleted)
         {
             #region Complete Jobs
+            attractJobHandle.Complete();
             updateMeshJobHandleL.Complete();
             updateMeshJobHandleR.Complete();
-            attractionJobHandle.Complete();
             updateMeshJobHandleLM.Complete();
             updateMeshJobHandleRM.Complete();
             #endregion
             if (isEvenFrame)
             {
                 #region Update Mesh Jobs
+                if (LastPositionOffsetMinMax != PositionOffsetMinMax)
+                {
+                    for (int i = 0; i < ParticlesPerHand; i++)
+                    {
+                        // array is shared by all mesh jobs but needs to accessed by one
+                        updateMeshJobL.MeshPositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(PositionOffsetMinMax.x, PositionOffsetMinMax.y));
+                    }
+                }
+                LastPositionOffsetMinMax = PositionOffsetMinMax;
                 MeshPositionOffsetsIndex = MeshPositionOffsetsIndex < updateMeshJobL.MeshPositionOffsets.Length ? MeshPositionOffsetsIndex + 1 : 0;
+                #region Stretch Factor Min Max
+                if (LastStretchFactorMinMax != StretchFactorMinMax)
+                {
+                    StretchFactorIncrease = new float[ParticlesPerHand];
+                    for (int i = 0; i < StretchFactorIncrease.Length; i++)
+                    {
+                        float linearRandom = UnityEngine.Random.Range(StretchFactorMinMax.x, StretchFactorMinMax.y);
+                        StretchFactorIncrease[i] = Mathf.Pow(linearRandom, StretchFactorExponent);
+                    }
+                }
+                LastStretchFactorMinMax = StretchFactorMinMax;
+                #endregion
                 #region Update Mesh Job L
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
@@ -684,7 +688,14 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Stretch
                 for (int i = 0; i < updateMeshJobL.StretchFactor.Length; i++)
                 {
-                    updateMeshJobL.StretchFactor[i] = updateMeshJobL.StretchFactor[i] < 1 ? updateMeshJobL.StretchFactor[i] + StretchFactorIncrease[i] : 1;
+                    if (updateMeshJobL.StretchFactor[i] < StretchMax)
+                    {
+                        updateMeshJobL.StretchFactor[i] = updateMeshJobL.StretchFactor[i] + StretchFactorIncrease[i];
+                    }
+                    else
+                    {
+                        updateMeshJobL.StretchFactor[i] = StretchMax;
+                    }
                 }
                 #endregion
                 if (updateMeshJobL.JointPositions.Length > 0) updateMeshJobHandleL = updateMeshJobL.Schedule(updateMeshJobL.BaseMeshPositions.Length, 1024);
@@ -709,7 +720,14 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Stretch
                 for (int i = 0; i < updateMeshJobR.StretchFactor.Length; i++)
                 {
-                    updateMeshJobR.StretchFactor[i] = updateMeshJobR.StretchFactor[i] < 1 ? updateMeshJobR.StretchFactor[i] + StretchFactorIncrease[i] : 1;
+                    if (updateMeshJobR.StretchFactor[i] < StretchMax)
+                    {
+                        updateMeshJobR.StretchFactor[i] = updateMeshJobR.StretchFactor[i] + StretchFactorIncrease[i];
+                    }
+                    else
+                    {
+                        updateMeshJobR.StretchFactor[i] = StretchMax;
+                    }
                 }
                 #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
@@ -730,10 +748,8 @@ public class TheOtherFactor : MonoBehaviour
                         // The mirrored position is the original position moved by twice the distance to the plane, along the plane's normal
                         Vector3 mirroredPosition = LJoints[i].position - 2 * distanceToPlane * mirrorPlaneNormal;
 
-                        //Vector3 mirrorPosition = LJoints[i].position;
-                        //mirrorPosition.z = -mirrorPosition.z;
                         LMJoints[i].position = mirroredPosition;
-                        LMJoints[i].rotation = LJoints[i].rotation;// MirrorRotation(LJoints[i].rotation, Vector3.up);
+                        LMJoints[i].rotation = LJoints[i].rotation;
                     }
                 }
                 for (int i = 0; i < updateMeshJobLM.JointPositions.Length; i++)
@@ -750,6 +766,14 @@ public class TheOtherFactor : MonoBehaviour
                 #endregion
                 #region Update PositionOffsetsIndex
                 updateMeshJobLM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
+                #endregion
+                #region Update Stretch (not active)
+                /*
+                for (int i = 0; i < updateMeshJobLM.StretchFactor.Length; i++)
+                {
+                    updateMeshJobLM.StretchFactor[i] = updateMeshJobLM.StretchFactor[i] < StretchMax ? updateMeshJobLM.StretchFactor[i] + StretchFactorIncrease[i] : StretchMax;
+                }
+                */
                 #endregion
                 if (updateMeshJobLM.JointPositions.Length > 0) updateMeshJobHandleLM = updateMeshJobLM.Schedule(updateMeshJobLM.BaseMeshPositions.Length, 1024);
                 #endregion
@@ -768,10 +792,8 @@ public class TheOtherFactor : MonoBehaviour
                         // The mirrored position is the original position moved by twice the distance to the plane, along the plane's normal
                         Vector3 mirroredPosition = RJoints[i].position - 2 * distanceToPlane * mirrorPlaneNormal;
                         
-                        //Vector3 mirrorPosition = RJoints[i].position;
-                        //mirrorPosition.z = -mirrorPosition.z;
                         RMJoints[i].position = mirroredPosition;
-                        RMJoints[i].rotation = RJoints[i].rotation;// MirrorRotation(RJoints[i].rotation, Vector3.up);
+                        RMJoints[i].rotation = RJoints[i].rotation;
                     }
                 }
                 for (int i = 0; i < updateMeshJobRM.JointPositions.Length; i++)
@@ -789,23 +811,24 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update PositionOffsetsIndex
                 updateMeshJobRM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
+                #region Update Stretch (not active)
+                /*
+                for (int i = 0; i < updateMeshJobRM.StretchFactor.Length; i++)
+                {
+                    updateMeshJobRM.StretchFactor[i] = updateMeshJobRM.StretchFactor[i] < StretchMax ? updateMeshJobRM.StretchFactor[i] + StretchFactorIncrease[i] : StretchMax;
+                }
+                */
+                #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (updateMeshJobRM.JointPositions.Length > 0) updateMeshJobHandleRM = updateMeshJobRM.Schedule(updateMeshJobRM.BaseMeshPositions.Length, 1024);
                 #endregion
-                #endregion
-                #region Mirror Rotation Function
-                // Function to mirror a rotation around a given axis
-                Quaternion MirrorRotation(Quaternion rotation, Vector3 axis)
-                {
-                    return Quaternion.AngleAxis(180, axis) * rotation;
-                }
                 #endregion
             }
             else
             {
                 #region Attraction Job
                 UpdateAttractionJob();
-                attractionJobHandle = attractJob.ScheduleBatch(particleSys, 1024);
+                attractJobHandle = attractJob.ScheduleBatch(particleSys, 1024);
                 #endregion
                 #region Update Previous Joint Positions in Update Mesh Job
                 for (int i = 0; i < updateMeshJobL.JointPositions.Length; i++)
@@ -843,6 +866,14 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Pseudo Mesh
         #region Indices
+        if(LastIndexStepSizeMinMax != IndexStepSizeMinMax)
+        {
+            for (int i = 0; i < attractJob.IndexStepSizes.Length; i++)
+            {
+                attractJob.IndexStepSizes[i] = Mathf.RoundToInt(UnityEngine.Random.Range(IndexStepSizeMinMax.x, IndexStepSizeMinMax.y));
+            }
+        }
+        LastIndexStepSizeMinMax = IndexStepSizeMinMax;
         attractJob.IndexStepsSizeIndex = attractJob.IndexStepsSizeIndex < attractJob.IndexStepSizes.Length ? attractJob.IndexStepsSizeIndex + 1 : 0;
         #endregion
         #endregion
@@ -900,6 +931,18 @@ public class TheOtherFactor : MonoBehaviour
     }
     private void UpdateParticlesAttractionLR()
     {
+        if (LastPerParticleScalingMinMax != PerParticleScalingMinMax)
+        {
+            int totalParticles = ParticlesPerHand * 2;
+            PerParticleScaling = new float[totalParticles];
+            for (int i = 0; i < totalParticles; i++)
+            {
+                float linearRandom = UnityEngine.Random.Range(PerParticleScalingMinMax.x, PerParticleScalingMinMax.y);
+                PerParticleScaling[i] = Mathf.Pow(linearRandom, PerParticleScalingExponent);
+            }
+        }
+        LastPerParticleScalingMinMax = PerParticleScalingMinMax;
+
         Vector4 attractionVector = Vector4.one;
         Vector4 perParticleScalingVector = Vector4.one;
 
@@ -907,30 +950,53 @@ public class TheOtherFactor : MonoBehaviour
 
         for (int i = 0; i < attractJob.ParticlesAttractionGroups.Length; i++)
         {
+            // Reset perParticleScalingVector for each particle group
+            perParticleScalingVector = new Vector4(PerParticleScaling[i], PerParticleScaling[i], PerParticleScaling[i], PerParticleScaling[i]);
+
+            // Determine the index for this quarter
+            int index = i / quarterLength;
+            index = Mathf.Min(index, PerParticleScalingGroups.Length - 1); // Ensure index doesn't exceed 'assignment' string length
+
+            // Map character to Vector4 index and set that component to 1
+            switch (PerParticleScalingGroups[index])
+            {
+                case 'x':
+                    perParticleScalingVector.x = 1;
+                    break;
+                case 'y':
+                    perParticleScalingVector.y = 1;
+                    break;
+                case 'z':
+                    perParticleScalingVector.z = 1;
+                    break;
+                case 'w':
+                    perParticleScalingVector.w = 1;
+                    break;
+            }
+
+            // Set the attractionVector based on the current quarter
             if (i < quarterLength)
             {
                 // First quarter
                 attractionVector = ParticlesAttractionGroup1;
-                perParticleScalingVector = new Vector4(1, PerParticleScaling[i], PerParticleScaling[i], PerParticleScaling[i]);
             }
             else if (i < quarterLength * 2)
             {
                 // Second quarter
                 attractionVector = ParticlesAttractionGroup2;
-                perParticleScalingVector = new Vector4(PerParticleScaling[i], 1, PerParticleScaling[i], PerParticleScaling[i]);
             }
             else if (i < quarterLength * 3)
             {
                 // Third quarter
                 attractionVector = ParticlesAttractionGroup3;
-                perParticleScalingVector = new Vector4(PerParticleScaling[i], PerParticleScaling[i], 1, PerParticleScaling[i]);
             }
             else
             {
                 // Fourth quarter
                 attractionVector = ParticlesAttractionGroup4;
-                perParticleScalingVector = new Vector4(PerParticleScaling[i], PerParticleScaling[i], PerParticleScaling[i], 1);
             }
+
+            // Assign the calculated vectors to the job
             attractJob.ParticlesAttractionGroups[i] = attractionVector;
             attractJob.PerParticleScaling[i] = perParticleScalingVector;
         }
@@ -938,11 +1004,6 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Jobs
     #region Attraction Job
-    /// <summary>
-    /// This job uses AttractionStrength parameters to control attraction strength
-    /// and updates particle positions and velocities based on attraction to specific world positions. It handles particles for both left and right Hands.
-    /// The job also includes logic for color copmutation based on the particles velocity.
-    /// </summary>
     [BurstCompile]
     struct AttractionJob : IJobParticleSystemParallelForBatch
     {
@@ -1207,6 +1268,7 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Stretch
         [ReadOnly] public NativeArray<float> StretchFactor;
+        [ReadOnly] public Vector3 StretchPlaneNormal;
         #endregion
         public void Execute(int index)
         {
@@ -1222,9 +1284,9 @@ public class TheOtherFactor : MonoBehaviour
 
             // Compute the final world position for the particle and store it
             Vector3 DynamicMeshPosition = ComputeWorldPosition(jointPosition, jointRotation, baseMeshPosition, positionOffset);
-            // Stretch the dynamic pseudo mesh
-            float z = math.lerp(DynamicMeshPosition.z, -DynamicMeshPosition.z, StretchFactor[index]);
-            DynamicMeshPositions[index] = new Vector3(DynamicMeshPosition.x, DynamicMeshPosition.y, z);
+
+            DynamicMeshPositions[index] = DynamicMeshPosition + StretchFactor[index] * StretchPlaneNormal;
+
             JointDistanceMoved[index] = math.lerp(JointDistanceMoved[index], math.length(prevJointPosition - jointPosition), .05f);
         }
         #region Compute World Position
@@ -1243,13 +1305,80 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
     }
     #endregion
-    #region Complete Jobs On Disable
+    #region Complete Jobs And Dispose Native Arrays On Disable
     void OnDisable()
     {
         #region Complete Jobs
-        attractionJobHandle.Complete();
+        // Ensure all jobs are completed before disposing of the NativeArrays
+        attractJobHandle.Complete();
         updateMeshJobHandleL.Complete();
         updateMeshJobHandleR.Complete();
+        updateMeshJobHandleLM.Complete(); // Assuming there's a handle for this
+        updateMeshJobHandleRM.Complete(); // Assuming there's a handle for this
+        #endregion
+        #region Dispose Jobs
+        #region Dispose Attract Job
+        #region Dispose Mesh Positions Arrays
+        if (attractJob.MeshPositionsL.IsCreated) attractJob.MeshPositionsL.Dispose();
+        if (attractJob.MeshPositionsR.IsCreated) attractJob.MeshPositionsR.Dispose();
+        if (attractJob.MeshPositionsLM.IsCreated) attractJob.MeshPositionsLM.Dispose();
+        if (attractJob.MeshPositionsRM.IsCreated) attractJob.MeshPositionsRM.Dispose();
+        #endregion
+
+        #region Dispose Mesh Indices Arrays
+        // Assuming MeshIndices are part of attractJob or another job, update accordingly
+        if (attractJob.MeshIndicesL.IsCreated) attractJob.MeshIndicesL.Dispose();
+        if (attractJob.MeshIndicesR.IsCreated) attractJob.MeshIndicesR.Dispose();
+        if (attractJob.MeshIndicesLM.IsCreated) attractJob.MeshIndicesLM.Dispose();
+        if (attractJob.MeshIndicesRM.IsCreated) attractJob.MeshIndicesRM.Dispose();
+        #endregion
+
+        #region Dispose Attraction Scaling Arrays
+        // Update these if they are part of attractJob or another job
+        if (attractJob.ParticlesAttractionGroups.IsCreated) attractJob.ParticlesAttractionGroups.Dispose();
+        if (attractJob.PerParticleScaling.IsCreated) attractJob.PerParticleScaling.Dispose();
+        #endregion
+
+        #region Dispose Joint Distance Moved Arrays
+        if (attractJob.JointDistanceMovedL.IsCreated) attractJob.JointDistanceMovedL.Dispose();
+        if (attractJob.JointDistanceMovedR.IsCreated) attractJob.JointDistanceMovedR.Dispose();
+        if (attractJob.JointDistanceMovedLM.IsCreated) attractJob.JointDistanceMovedLM.Dispose();
+        if (attractJob.JointDistanceMovedRM.IsCreated) attractJob.JointDistanceMovedRM.Dispose();
+        #endregion
+        #endregion
+        #region Dispose UpdateMeshJobs
+        // Dispose World Position Offsets Array (assuming this is shared and needs to be disposed separately)
+        if (updateMeshJobL.MeshPositionOffsets.IsCreated) updateMeshJobL.MeshPositionOffsets.Dispose();
+
+        #region L
+        if (updateMeshJobL.JointPositions.IsCreated) updateMeshJobL.JointPositions.Dispose();
+        if (updateMeshJobL.PrevJointPositions.IsCreated) updateMeshJobL.PrevJointPositions.Dispose();
+        if (updateMeshJobL.JointRotations.IsCreated) updateMeshJobL.JointRotations.Dispose();
+        if (updateMeshJobL.JointToParticleMap.IsCreated) updateMeshJobL.JointToParticleMap.Dispose();
+        if (updateMeshJobL.BaseMeshPositions.IsCreated) updateMeshJobL.BaseMeshPositions.Dispose();
+        if (updateMeshJobL.StretchFactor.IsCreated) updateMeshJobL.StretchFactor.Dispose();
+        #endregion
+        #region R
+        if (updateMeshJobR.JointPositions.IsCreated) updateMeshJobR.JointPositions.Dispose();
+        if (updateMeshJobR.PrevJointPositions.IsCreated) updateMeshJobR.PrevJointPositions.Dispose();
+        if (updateMeshJobR.JointRotations.IsCreated) updateMeshJobR.JointRotations.Dispose();
+        if (updateMeshJobR.JointToParticleMap.IsCreated) updateMeshJobR.JointToParticleMap.Dispose();
+        if (updateMeshJobR.BaseMeshPositions.IsCreated) updateMeshJobR.BaseMeshPositions.Dispose();
+        if (updateMeshJobR.StretchFactor.IsCreated) updateMeshJobR.StretchFactor.Dispose();
+        #endregion
+        #region LM
+        if (updateMeshJobLM.JointPositions.IsCreated) updateMeshJobLM.JointPositions.Dispose();
+        if (updateMeshJobLM.PrevJointPositions.IsCreated) updateMeshJobLM.PrevJointPositions.Dispose();
+        if (updateMeshJobLM.JointRotations.IsCreated) updateMeshJobLM.JointRotations.Dispose();
+        if (updateMeshJobLM.StretchFactor.IsCreated) updateMeshJobLM.StretchFactor.Dispose();
+        #endregion
+        #region RM
+        if (updateMeshJobRM.JointPositions.IsCreated) updateMeshJobRM.JointPositions.Dispose();
+        if (updateMeshJobRM.PrevJointPositions.IsCreated) updateMeshJobRM.PrevJointPositions.Dispose();
+        if (updateMeshJobRM.JointRotations.IsCreated) updateMeshJobRM.JointRotations.Dispose();
+        if (updateMeshJobRM.StretchFactor.IsCreated) updateMeshJobRM.StretchFactor.Dispose();
+        #endregion
+        #endregion
         #endregion
     }
     #endregion

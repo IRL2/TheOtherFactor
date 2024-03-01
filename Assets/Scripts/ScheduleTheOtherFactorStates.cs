@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using TMPro;
@@ -9,7 +8,6 @@ using UnityEngine;
 public class FactorState
 {
     #region State Management Related
-    public bool RealTimeMirror;
     public bool RestartEngine;
     public string Name;
     #endregion
@@ -39,9 +37,12 @@ public class FactorState
     #region Per Particle Scaling
     public Vector2 PerParticleScalingMinMax;
     public float PerParticleScalingExponent;
+    public string PerParticleScalingGroups;
     #endregion
     #region Position Offsets
     public Vector2 PositionOffsetMinMax;
+    public bool RealTimeMirror;
+    public float MirrorDistance;
     #endregion
     #region Index Step Size
     public Vector2 IndexStepSizeMinMax;
@@ -58,14 +59,9 @@ public class FactorState
     #region Stretch
     public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
     public float StretchFactorExponent = 1f;
+    public float StretchMax = 1f;
     #endregion
     #endregion
-}
-[Serializable]
-public class PresetCycle
-{
-    public string presetName;
-    public float duration;
 }
 
 [ExecuteInEditMode]
@@ -81,8 +77,20 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     [SerializeField]
     private string currentPresetName;
     #endregion
+    #region Utility
+    [Header("Utility")]
+    public bool PinchToSwitchPresets = false;
+    public bool DisplayCanvas = true;
+    public AudioClip switchSound; // Sound to play when switching presets
+    private Transform canvas;
+    private CanvasMover canvasMover;
+    private TextMeshProUGUI presetDisplayText; // Reference to the TMP component
+    private AudioSource audioSource;
+    [HideInInspector]
+    public bool tofIsRunningJobs = false;
+    #endregion
     #region Preset Variables
-    public bool RealTimeMirror;
+    [Header("Preset Variables")]
     public bool RestartEngine = false;
     public bool DisplayOculusHands = false;
     #region Particles
@@ -119,17 +127,29 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public Vector4 ParticlesAttractionGroup3 = Vector4.one;
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
     public Vector4 ParticlesAttractionGroup4 = Vector4.one;
-    #endregion
     #region Per Particle Scaling
     [Header("Per Particle Scaling")]
     public Vector2 PerParticleScalingMinMax = new Vector2(0f, 1f);
     public float PerParticleScalingExponent = .1f;
+    public string PerParticleScalingGroups = "xyzw";
+    #endregion
     #endregion
     #region Position Offsets
     // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
     [Header("Position Offsets")]
     [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
     public Vector2 PositionOffsetMinMax = new Vector2(0f, .7f);
+    #region Joint Mirror
+    [Header("Joint Mirror")]
+    public bool RealTimeMirror = false;
+    public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
+    #endregion
+    #region Stretch
+    [Header("Stretch")]
+    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
+    public float StretchMax = 1f;
+    #endregion
     #endregion
     #region Index Step Size
     [Header("Index Step Size")]
@@ -147,65 +167,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public bool UseHeartbeat = true;
     public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
     #endregion
-    #region Stretch
-    [Header("Stretch")]
-    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
     #endregion
     #endregion
-    #region Utility
-    public bool PinchToSwitchPresets = false;
-    public bool DisplayCanvas = true;
-    public AudioClip switchSound; // Sound to play when switching presets
-    private Transform canvas;
-    private CanvasMover canvasMover;
-    private TextMeshProUGUI presetDisplayText; // Reference to the TMP component
-    private AudioSource audioSource;
-    [HideInInspector]
-    public bool tofIsRunningJobs = false;
-    #endregion
-    #endregion
-    void Start()
-    {
-        tof = GetComponent<TheOtherFactor>();
-        audioSource = GetComponent<AudioSource>();
-        if (audioSource == null)
-        {
-            audioSource = gameObject.AddComponent<AudioSource>();
-        }
-        canvas = GameObject.Find("PresetDisplayCanvas").transform;
-        canvasMover = canvas.GetComponent<CanvasMover>();
-        presetDisplayText = canvas.GetComponentInChildren<TextMeshProUGUI>();
-        canvasMover.SetCanvasPosition();
-        presetDisplayText.text = currentPresetName;
-    }
-    private void Update()
-    {
-        UpdateTOF();
-        UpdatePresetNameList();
-
-        if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
-        else presetDisplayText.text = "";
-
-        if (PinchToSwitchPresets)
-        {
-            // Check for a pinch on the left hand
-            if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch))
-            {
-                PreviousPreset();
-            }
-
-            // Check for a pinch on the right hand
-            if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch))
-            {
-                NextPreset();
-                PlaySwitchSound();
-            }
-        }
-    }
     private void UpdateTOF()
     {
-        tof.RealTimeMirror = RealTimeMirror;
         tof.DisplayOculusHands = DisplayOculusHands;
         #region Particles
         tof.ParticlesPerHand = ParticlesPerHand;
@@ -227,13 +192,23 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.ParticlesAttractionGroup2 = ParticlesAttractionGroup2;
         tof.ParticlesAttractionGroup3 = ParticlesAttractionGroup3;
         tof.ParticlesAttractionGroup4 = ParticlesAttractionGroup4;
-        #endregion
         #region Per Particle Scaling
         tof.PerParticleScalingMinMax = PerParticleScalingMinMax;
         tof.PerParticleScalingExponent = PerParticleScalingExponent;
+        tof.PerParticleScalingGroups = PerParticleScalingGroups;
+        #endregion
         #endregion
         #region Position Offsets
         tof.PositionOffsetMinMax = PositionOffsetMinMax;
+        #region Joint Mirror
+        tof.RealTimeMirror = RealTimeMirror;
+        tof.MirrorDistance = MirrorDistance;
+        #endregion
+        #region Stretch
+        tof.StretchFactorMinMax = StretchFactorMinMax;
+        tof.StretchFactorExponent = StretchFactorExponent;
+        tof.StretchMax = StretchMax;
+        #endregion
         #endregion
         #region Index Step Size
         tof.IndexStepSizeMinMax = IndexStepSizeMinMax;
@@ -247,10 +222,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.UseHeartbeat = UseHeartbeat;
         tof.AlphaMinMax = AlphaMinMax;
         #endregion
-        #region Stretch
-        tof.StretchFactorMinMax = StretchFactorMinMax;
-        tof.StretchFactorExponent = StretchFactorExponent;
-        #endregion
     }
     public void SavePreset(string name)
     {
@@ -262,7 +233,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             RestartEngine = RestartEngine,
             Name = name,
             #endregion
-            RealTimeMirror = RealTimeMirror,
             DisplayOculusHands = DisplayOculusHands,
             #region Particles
             ParticlesPerHand = ParticlesPerHand,
@@ -288,9 +258,19 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #region Per Particle Scaling
             PerParticleScalingMinMax = PerParticleScalingMinMax,
             PerParticleScalingExponent = PerParticleScalingExponent,
+            PerParticleScalingGroups = PerParticleScalingGroups,
             #endregion
             #region Position Offsets
             PositionOffsetMinMax = PositionOffsetMinMax,
+            #region Joint Mirror
+            RealTimeMirror = RealTimeMirror,
+            MirrorDistance = MirrorDistance,
+            #endregion
+            #region Stretch
+            StretchFactorMinMax = StretchFactorMinMax,
+            StretchFactorExponent = StretchFactorExponent,
+            StretchMax = StretchMax,
+            #endregion
             #endregion
             #region Index Step Size
             IndexStepSizeMinMax = IndexStepSizeMinMax,
@@ -304,10 +284,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             UseHeartbeat = UseHeartbeat,
             AlphaMinMax = AlphaMinMax,
             #endregion
-            #region Stretch
-            StretchFactorMinMax = StretchFactorMinMax,
-            StretchFactorExponent = StretchFactorExponent,
-            #endregion
+
         };
         for (int i = 0; i < presets.Count; i++)
         {
@@ -322,31 +299,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         {
             presets.Add(newState);
             presetNamesForReference.Add(newState.Name);
-        }
-    }
-    public void ApplyPresetByNameOrIndex(string name = null, int index = -1)
-    {
-        FactorState selectedPreset = null;
-
-        if (!string.IsNullOrEmpty(name))
-        {
-            // Find preset by name
-            selectedPreset = presets.FirstOrDefault(p => p.Name == name);
-        }
-        else if (index >= 0 && index < presets.Count)
-        {
-            // Find preset by index
-            selectedPreset = presets[index];
-        }
-
-        if (selectedPreset != null)
-        {
-            ApplyPreset(selectedPreset);
-            currentPresetIndex = presets.IndexOf(selectedPreset);
-        }
-        else
-        {
-            Debug.LogWarning("Preset not found.");
         }
     }
     private void ApplyPreset(FactorState state)
@@ -409,6 +361,26 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         ParticlesAttractionGroup3 = state.ParticlesAttractionGroup3;
         tof.ParticlesAttractionGroup4 = state.ParticlesAttractionGroup4;
         ParticlesAttractionGroup4 = state.ParticlesAttractionGroup4;
+        #region Per Particle Scaling
+        tof.PerParticleScalingGroups = state.PerParticleScalingGroups;
+        PerParticleScalingGroups = state.PerParticleScalingGroups;
+        #endregion
+        #endregion
+        #region Position Offsets
+        #region Joint Mirror
+        tof.RealTimeMirror = state.RealTimeMirror;
+        RealTimeMirror = state.RealTimeMirror;
+        tof.MirrorDistance = state.MirrorDistance;
+        MirrorDistance = state.MirrorDistance;
+        #endregion
+        #region Stretch
+        tof.StretchFactorMinMax = state.StretchFactorMinMax;
+        tof.StretchFactorExponent = state.StretchFactorExponent;
+        StretchFactorMinMax = state.StretchFactorMinMax;
+        StretchFactorExponent = state.StretchFactorExponent;
+        tof.StretchMax = state.StretchMax;
+        StretchMax = state.StretchMax;
+        #endregion
         #endregion
         #region Color
         tof.UseDebugColors = state.UseDebugColors;
@@ -425,18 +397,76 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         UseHeartbeat = state.UseHeartbeat;
         tof.AlphaMinMax = state.AlphaMinMax; AlphaMinMax = state.AlphaMinMax;
         #endregion
-        #region Stretch
-        tof.StretchFactorMinMax = state.StretchFactorMinMax;
-        tof.StretchFactorExponent = state.StretchFactorExponent;
-        StretchFactorMinMax = state.StretchFactorMinMax;
-        StretchFactorExponent = state.StretchFactorExponent;
-        #endregion
 
         RestartEngine = state.RestartEngine;
         currentPresetName = state.Name;
 
         canvasMover.SetCanvasPosition();
         if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
+    }
+    #region Functions without the need to touch when variables change
+    void Start()
+    {
+        tof = GetComponent<TheOtherFactor>();
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+        canvas = GameObject.Find("PresetDisplayCanvas").transform;
+        canvasMover = canvas.GetComponent<CanvasMover>();
+        presetDisplayText = canvas.GetComponentInChildren<TextMeshProUGUI>();
+        canvasMover.SetCanvasPosition();
+        presetDisplayText.text = currentPresetName;
+    }
+    private void Update()
+    {
+        UpdateTOF();
+        UpdatePresetNameList();
+
+        if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
+        else presetDisplayText.text = "";
+
+        if (PinchToSwitchPresets)
+        {
+            // Check for a pinch on the left hand
+            if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.LTouch))
+            {
+                PreviousPreset();
+            }
+
+            // Check for a pinch on the right hand
+            if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch))
+            {
+                NextPreset();
+                PlaySwitchSound();
+            }
+        }
+    }
+    public void ApplyPresetByNameOrIndex(string name = null, int index = -1)
+    {
+        FactorState selectedPreset = null;
+
+        if (!string.IsNullOrEmpty(name))
+        {
+            // Find preset by name
+            selectedPreset = presets.FirstOrDefault(p => p.Name == name);
+        }
+        else if (index >= 0 && index < presets.Count)
+        {
+            // Find preset by index
+            selectedPreset = presets[index];
+        }
+
+        if (selectedPreset != null)
+        {
+            ApplyPreset(selectedPreset);
+            currentPresetIndex = presets.IndexOf(selectedPreset);
+        }
+        else
+        {
+            Debug.LogWarning("Preset not found.");
+        }
     }
     public void UpdatePresetNameList()
     {
@@ -511,17 +541,31 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         // Attraction Scaling Per Group/Hand Section
         sb.AppendLine("\nAttraction Scaling Per Group/Hand:");
-        sb.AppendLine($"Particles Attraction Group 1: ({ParticlesAttractionGroup1.x}, {ParticlesAttractionGroup1.y})");
-        sb.AppendLine($"Particles Attraction Group 2: ({ParticlesAttractionGroup2.x}, {ParticlesAttractionGroup2.y})");
+        sb.AppendLine($"Particles Attraction Group 1: {ParticlesAttractionGroup1}");
+        sb.AppendLine($"Particles Attraction Group 2: {ParticlesAttractionGroup2}");
+        sb.AppendLine($"Particles Attraction Group 3: {ParticlesAttractionGroup3}");
+        sb.AppendLine($"Particles Attraction Group 4: {ParticlesAttractionGroup4}");
 
         // Per Particle Scaling Section
         sb.AppendLine("\nPer Particle Scaling:");
         sb.AppendLine($"Per Particle Scaling Min/Max: ({PerParticleScalingMinMax.x}, {PerParticleScalingMinMax.y})");
-        sb.AppendLine($"Per Particle Scaling Power Factor: {PerParticleScalingExponent}");
+        sb.AppendLine($"Per Particle Scaling Exponent: {PerParticleScalingExponent}");
+        sb.AppendLine($"Per Particle Scaling Groups: {PerParticleScalingGroups}");
 
         // Position Offsets Section
         sb.AppendLine("\nPosition Offsets:");
         sb.AppendLine($"Position Offset Min/Max: ({PositionOffsetMinMax.x}, {PositionOffsetMinMax.y})");
+
+        // Joint Mirror Section
+        sb.AppendLine("\nJoint Mirror:");
+        sb.AppendLine($"Real Time Mirror: {RealTimeMirror}");
+        sb.AppendLine($"Mirror Distance: {MirrorDistance}");
+
+        // Stretch Section
+        sb.AppendLine("\nStretch:");
+        sb.AppendLine($"Stretch Factor Min/Max: ({StretchFactorMinMax.x}, {StretchFactorMinMax.y})");
+        sb.AppendLine($"Stretch Factor Exponent: {StretchFactorExponent}");
+        sb.AppendLine($"Stretch Max: {StretchMax}");
 
         // Index Step Size Section
         sb.AppendLine("\nIndex Step Size:");
@@ -538,4 +582,5 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         return sb.ToString();
     }
+    #endregion
 }
