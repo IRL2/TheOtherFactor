@@ -24,6 +24,7 @@ public class FactorState
     public float AttractionStrength;
     public float DistForMinAtt;
     public Vector2 AttByDistRange;
+    public Vector4 AttMirrorGroups;
     #endregion
     #region Velocity
     public float VelocityLerp;
@@ -91,7 +92,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #endregion
     #region Preset Variables
     [Header("Preset Variables")]
-    public bool RestartEngine = false;
     public bool DisplayOculusHands = false;
     #region Particles
     [Header("Particles")]
@@ -111,6 +111,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public float AttractionStrength = 1f;
     public float DistForMinAtt = 1f;
     public Vector2 AttByDistRange = new Vector2(0f, 1f);
+    public Vector4 AttMirrorGroups = Vector4.one;
     #endregion
     #region Velocity
     [Header("Velocity")]
@@ -183,6 +184,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.AttractionStrength = AttractionStrength;
         tof.DistForMinAtt = DistForMinAtt;
         tof.AttByDistRange = AttByDistRange;
+        tof.AttMirrorGroups = AttMirrorGroups;
         #endregion
         #region Velocity
         tof.VelocityLerp = VelocityLerp;
@@ -230,7 +232,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         FactorState newState = new FactorState
         {
             #region State Manage Related
-            RestartEngine = RestartEngine,
             Name = name,
             #endregion
             DisplayOculusHands = DisplayOculusHands,
@@ -303,29 +304,24 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     }
     private void ApplyPreset(FactorState state)
     {
-        if (!Application.isPlaying || state.RestartEngine)
-        {
-            if (Application.isPlaying) tof.StopTheOtherFactor();
-            #region Particles
-            tof.ParticlesPerHand = state.ParticlesPerHand;
-            ParticlesPerHand = state.ParticlesPerHand;
-            #endregion
-            #region Per Particle Scaling
-            tof.PerParticleScalingMinMax = state.PerParticleScalingMinMax;
-            PerParticleScalingMinMax = state.PerParticleScalingMinMax;
-            tof.PerParticleScalingExponent = state.PerParticleScalingExponent;
-            PerParticleScalingExponent = state.PerParticleScalingExponent;
-            #endregion
-            #region Position Offsets
-            tof.PositionOffsetMinMax = state.PositionOffsetMinMax;
-            PositionOffsetMinMax = state.PositionOffsetMinMax;
-            #endregion
-            #region Index Step Size
-            tof.IndexStepSizeMinMax = state.IndexStepSizeMinMax;
-            IndexStepSizeMinMax = state.IndexStepSizeMinMax;
-            #endregion
-            if (Application.isPlaying) tof.StartTheOtherFactor();
-        }
+        #region Particles
+        tof.ParticlesPerHand = state.ParticlesPerHand;
+        ParticlesPerHand = state.ParticlesPerHand;
+        #endregion
+        #region Per Particle Scaling
+        tof.PerParticleScalingMinMax = state.PerParticleScalingMinMax;
+        PerParticleScalingMinMax = state.PerParticleScalingMinMax;
+        tof.PerParticleScalingExponent = state.PerParticleScalingExponent;
+        PerParticleScalingExponent = state.PerParticleScalingExponent;
+        #endregion
+        #region Position Offsets
+        tof.PositionOffsetMinMax = state.PositionOffsetMinMax;
+        PositionOffsetMinMax = state.PositionOffsetMinMax;
+        #endregion
+        #region Index Step Size
+        tof.IndexStepSizeMinMax = state.IndexStepSizeMinMax;
+        IndexStepSizeMinMax = state.IndexStepSizeMinMax;
+        #endregion
         tof.RealTimeMirror = state.RealTimeMirror;
         RealTimeMirror = state.RealTimeMirror;
         tof.DisplayOculusHands = state.DisplayOculusHands;
@@ -347,6 +343,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         DistForMinAtt = state.DistForMinAtt;
         tof.AttByDistRange = state.AttByDistRange;
         AttByDistRange = state.AttByDistRange;
+        tof.AttMirrorGroups = state.AttMirrorGroups;
+        AttMirrorGroups = state.AttMirrorGroups;
         #endregion
         #region Velocity
         tof.VelocityLerp = state.VelocityLerp;
@@ -398,7 +396,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.AlphaMinMax = state.AlphaMinMax; AlphaMinMax = state.AlphaMinMax;
         #endregion
 
-        RestartEngine = state.RestartEngine;
         currentPresetName = state.Name;
 
         canvasMover.SetCanvasPosition();

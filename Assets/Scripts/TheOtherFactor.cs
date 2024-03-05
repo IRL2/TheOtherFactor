@@ -1,4 +1,5 @@
 using Oculus.Interaction;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,6 +7,7 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.ParticleSystemJobs;
 
@@ -32,6 +34,7 @@ public class TheOtherFactor : MonoBehaviour
     public float AttractionStrength = 1f;
     public float DistForMinAtt = 1f;
     public Vector2 AttByDistRange = new Vector2(0f, 1f);
+    public Vector4 AttMirrorGroups = Vector4.one;
     #endregion
     #region Velocity
     [Header("Velocity")]
@@ -63,6 +66,8 @@ public class TheOtherFactor : MonoBehaviour
     #region Joint Mirror
     [Header("Joint Mirror")]
     public bool RealTimeMirror = false;
+    public Transform MirrorPoint;
+    public Transform MirrorPoint2;
     public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
     private Vector3 mirrorPlanePosition;
     private Vector3 mirrorPlaneNormal;
@@ -162,15 +167,6 @@ public class TheOtherFactor : MonoBehaviour
     #region Pseudo-Mesh
     // used to alternate between world position jobs and attraction job to avoid read/write issues since world positions get communicated between them
     private bool isEvenFrame = true;
-    #region Setup Variables
-    [System.Serializable]
-    public class JointData
-    {
-        public int jointIndex;
-        public string jointName;
-        public List<Vector3> relativePositions = new List<Vector3>();
-    }
-    #endregion
     #region Runtime "Pseudo Mesh"
     private List<Vector3> LeftHandRelativePositions = new List<Vector3>();
     private List<Vector3> RightHandRelativePositions = new List<Vector3>();
@@ -270,6 +266,8 @@ public class TheOtherFactor : MonoBehaviour
         #region Activate Runtime Functions
         RunJobs = true;
         #endregion
+        //StartCoroutine(IncreaseIndexStepSizeY(4f));
+        //StartCoroutine(IncreaseAttractionStrength(.5f));
     }
     #region Fetch Pseudo Mesh
     private void FetchPseudoMesh()
@@ -293,6 +291,8 @@ public class TheOtherFactor : MonoBehaviour
         bool isLeftHandClose = false;
         bool isRightHandClose = false;
 
+        await Task.Delay(3000);
+
         // Continue checking until both hands are within the target distance
         while (!isLeftHandClose || !isRightHandClose)
         {
@@ -313,8 +313,17 @@ public class TheOtherFactor : MonoBehaviour
         Vector3 forwardHorizontal = new Vector3(mainCamera.transform.forward.x, 0, mainCamera.transform.forward.z).normalized;
         stretchPlaneNormal = forwardHorizontal;
 
+        // Rotate the forwardHorizontal vector by 90 degrees around the Y axis to split the view into left and right
+        Quaternion rotation = Quaternion.Euler(0, 90, 0); // Create a 90-degree rotation around the Y axis
+        Vector3 rotatedForward = rotation * forwardHorizontal; // Apply the rotation to the forwardHorizontal vector
+
         mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * MirrorDistance;
-        mirrorPlaneNormal = forwardHorizontal;
+        mirrorPlaneNormal = rotatedForward;
+        Vector3  MirrorPointPosition = mirrorPlanePosition;
+        MirrorPointPosition.y = 1.25f;
+        MirrorPoint.position = MirrorPointPosition;
+        MirrorPointPosition.y += .25f;
+        MirrorPoint2.position = MirrorPointPosition;
     }
     #endregion
     #region Emit Particles
@@ -336,22 +345,121 @@ public class TheOtherFactor : MonoBehaviour
 
         if (leftMiddle1Joint != null && rightMiddle1Joint != null)
         {
-            float emissionRadius = .1f; // Radius of the sphere around the hand joints
+            float emissionRadius = .5f; // Radius of the sphere around the hand joints
 
             // Emit particles around the left middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                emitParams.position = leftMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                //emitParams.position = leftMiddle1Joint + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                emitParams.position = MirrorPoint.position;
                 particleSys.Emit(emitParams, 1);
             }
 
             // Emit particles around the right middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                emitParams.position = rightMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                //emitParams.position = rightMiddle1Joint + UnityEngine.Random.insideUnitSphere * emissionRadius;
+                emitParams.position = MirrorPoint2.position;
                 particleSys.Emit(emitParams, 1);
             }
         }
+        Vector3 merkabaPosition = MirrorPoint.position;
+        merkabaPosition.y += (MirrorPoint2.position.y - MirrorPoint.position.y) / 2;
+        SetMerkaba(merkabaPosition);
+    }
+    private void SetMerkaba(Vector3 centerPoint)
+    {
+        // Get the current particles from the particle system
+        ParticleSystem.Particle[] particles = new ParticleSystem.Particle[particleSys.particleCount];
+        particleSys.GetParticles(particles);
+
+        int halfParticles = particleSys.particleCount / 2;
+        float radius = .075f;
+
+        // Directions to the centers of the six surrounding spheres in Cartesian coordinates
+        Vector3[] directions = {
+        new Vector3(1, 0, 0),
+        new Vector3(-1, 0, 0),
+        new Vector3(0, 1, 0),
+        new Vector3(0, -1, 0),
+        new Vector3(0, 0, 1),
+        new Vector3(0, 0, -1)
+    };
+
+        int idx = 0;
+
+        // Center sphere at the centerPoint
+        for (; idx < halfParticles / 7; idx++)
+        {
+            Vector3 randomPosition = UnityEngine.Random.onUnitSphere * radius;
+            Vector3 finalPosition = randomPosition + centerPoint;  // Offset by the center point
+
+            particles[idx].position = finalPosition;
+            particles[idx].velocity = Vector3.zero;
+        }
+
+        // Six surrounding spheres
+        for (int d = 0; d < directions.Length; d++)
+        {
+            Vector3 dir = directions[d];
+            Vector3 sphereCenter = centerPoint + dir * radius * 2;  // Offset by the center point
+
+            for (int i = 0; i < halfParticles / 7; i++, idx++)
+            {
+                Vector3 randomPosition = UnityEngine.Random.onUnitSphere * radius;
+                Vector3 finalPosition = randomPosition + sphereCenter;
+
+                particles[idx].position = finalPosition;
+                particles[idx].velocity = Vector3.zero;
+            }
+        }
+
+        // Merkaba
+        float merkabaScale = 0.2f;  // Scale for the Merkaba
+
+        // Coordinates for a single tetrahedron, scaled by the merkabaScale and offset by the center point
+        Vector3[] tetrahedronVertices = new Vector3[]
+        {
+        new Vector3(1 * merkabaScale, 0, -1 / Mathf.Sqrt(2) * merkabaScale) + centerPoint,
+        new Vector3(-1 * merkabaScale, 0, -1 / Mathf.Sqrt(2) * merkabaScale) + centerPoint,
+        new Vector3(0, 1 * merkabaScale, 1 / Mathf.Sqrt(2) * merkabaScale) + centerPoint,
+        new Vector3(0, -1 * merkabaScale, 1 / Mathf.Sqrt(2) * merkabaScale) + centerPoint
+        };
+
+        for (; idx < particles.Length; idx++)
+        {
+            bool isUpward = UnityEngine.Random.Range(0f, 1f) > 0.5f;
+            int indexA = UnityEngine.Random.Range(0, tetrahedronVertices.Length);
+            int indexB = (indexA + UnityEngine.Random.Range(1, tetrahedronVertices.Length)) % tetrahedronVertices.Length;
+            int indexC = (indexB + UnityEngine.Random.Range(1, tetrahedronVertices.Length)) % tetrahedronVertices.Length;
+
+            Vector3 pointA = tetrahedronVertices[indexA];
+            Vector3 pointB = tetrahedronVertices[indexB];
+            Vector3 pointC = tetrahedronVertices[indexC];
+
+            float u = UnityEngine.Random.Range(0f, 1f);
+            float v = UnityEngine.Random.Range(0f, 1f);
+
+            if (u + v > 1f)
+            {
+                u = 1f - u;
+                v = 1f - v;
+            }
+
+            float w = 1f - u - v;
+
+            Vector3 position = pointA * u + pointB * v + pointC * w;
+            if (!isUpward)
+            {
+                position = Quaternion.Euler(180, 0, 0) * (position - centerPoint) + centerPoint; // Rotate around the center point
+            }
+
+            particles[idx].position = position;
+            particles[idx].velocity = Vector3.zero;
+        }
+
+        // Apply the changes to the particle system
+        particleSys.SetParticles(particles);
     }
     #endregion
     #region Initialize Jobs
@@ -395,6 +503,10 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         attractJob = new AttractionJob
         {
+            MirrorPoint = MirrorPoint.position,
+            MirrorPoint2 = MirrorPoint2.position,
+            MirrorPlaneNormal = mirrorPlaneNormal,
+            AttMirrorGroups = AttMirrorGroups,
             #region Attraction
             AttractionStrength = AttractionStrength,
             AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength,
@@ -632,6 +744,39 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #endregion
     #region Runtime Updates
+    IEnumerator IncreaseIndexStepSizeY(float interval)
+    {
+        yield return new WaitForSeconds(30);
+
+        float increment = 1f; // Start with an increment of 1
+
+        while (IndexStepSizeMinMax.y < ParticlesPerHand) // Continue until the max value is reached
+        {
+            yield return new WaitForSeconds(interval); // Wait for the specified interval
+
+            // Increase the y value of the IndexStepSizeMinMax vector by the current increment
+            IndexStepSizeMinMax.y += increment;
+
+            // Clamp the y value to ensure it does not exceed the maximum value
+            IndexStepSizeMinMax.y = Mathf.Min(IndexStepSizeMinMax.y, ParticlesPerHand);
+
+            // Double the increment for the next iteration
+            increment *= 2;
+        }
+    }
+    IEnumerator IncreaseAttractionStrength(float interval)
+    {
+        float increment = .01f; // Start with an increment of 1
+
+        while (AttractionStrength < 1) // Continue until the max value is reached
+        {
+            yield return new WaitForSeconds(interval); // Wait for the specified interval
+
+            AttractionStrength += increment;
+
+            AttractionStrength = Mathf.Min(1, AttractionStrength);
+        }
+    }
     void OnParticleUpdateJobScheduled()
     {
         if (RunJobs && attractJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted && updateMeshJobHandleLM.IsCompleted && updateMeshJobHandleRM.IsCompleted)
@@ -664,6 +809,8 @@ public class TheOtherFactor : MonoBehaviour
                     {
                         float linearRandom = UnityEngine.Random.Range(StretchFactorMinMax.x, StretchFactorMinMax.y);
                         StretchFactorIncrease[i] = Mathf.Pow(linearRandom, StretchFactorExponent);
+                        updateMeshJobL.StretchFactor[i] = 0f;
+                        updateMeshJobR.StretchFactor[i] = 0f;
                     }
                 }
                 LastStretchFactorMinMax = StretchFactorMinMax;
@@ -733,25 +880,10 @@ public class TheOtherFactor : MonoBehaviour
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (updateMeshJobR.JointPositions.Length > 0) updateMeshJobHandleR = updateMeshJobR.Schedule(updateMeshJobR.BaseMeshPositions.Length, 1024);
                 #endregion
-                #region Update Mesh Job LM
-                #region Update Joint Positions
                 if (RealTimeMirror)
                 {
-                    for (int i = 0; i < updateMeshJobLM.JointPositions.Length; i++)
-                    {
-                        // Compute the vector from the point on the plane to the original transform's position
-                        Vector3 toTransform = LJoints[i].position - mirrorPlanePosition;
-
-                        // Project this vector onto the plane's normal to find the distance from the plane
-                        float distanceToPlane = Vector3.Dot(toTransform, mirrorPlaneNormal);
-
-                        // The mirrored position is the original position moved by twice the distance to the plane, along the plane's normal
-                        Vector3 mirroredPosition = LJoints[i].position - 2 * distanceToPlane * mirrorPlaneNormal;
-
-                        LMJoints[i].position = mirroredPosition;
-                        LMJoints[i].rotation = LJoints[i].rotation;
-                    }
-                }
+                #region Update Mesh Job LM
+                #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobLM.JointPositions.Length; i++)
                 {
                     updateMeshJobLM.JointPositions[i] = LMJoints[i].position;
@@ -779,23 +911,6 @@ public class TheOtherFactor : MonoBehaviour
                 #endregion
                 #region Update Mesh Job RM
                 #region Update Joint Positions
-                if (RealTimeMirror)
-                {
-                    for (int i = 0; i < updateMeshJobRM.JointPositions.Length; i++)
-                    {
-                        // Compute the vector from the point on the plane to the original transform's position
-                        Vector3 toTransform = RJoints[i].position - mirrorPlanePosition;
-
-                        // Project this vector onto the plane's normal to find the distance from the plane
-                        float distanceToPlane = Vector3.Dot(toTransform, mirrorPlaneNormal);
-
-                        // The mirrored position is the original position moved by twice the distance to the plane, along the plane's normal
-                        Vector3 mirroredPosition = RJoints[i].position - 2 * distanceToPlane * mirrorPlaneNormal;
-                        
-                        RMJoints[i].position = mirroredPosition;
-                        RMJoints[i].rotation = RJoints[i].rotation;
-                    }
-                }
                 for (int i = 0; i < updateMeshJobRM.JointPositions.Length; i++)
                 {
                     updateMeshJobRM.JointPositions[i] = RMJoints[i].position;
@@ -822,6 +937,7 @@ public class TheOtherFactor : MonoBehaviour
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (updateMeshJobRM.JointPositions.Length > 0) updateMeshJobHandleRM = updateMeshJobRM.Schedule(updateMeshJobRM.BaseMeshPositions.Length, 1024);
                 #endregion
+                }
                 #endregion
             }
             else
@@ -852,6 +968,10 @@ public class TheOtherFactor : MonoBehaviour
     }
     private void UpdateAttractionJob()
     {
+        attractJob.MirrorPoint = MirrorPoint.position;
+        attractJob.MirrorPoint2 = MirrorPoint2.position;
+        attractJob.MirrorPlaneNormal = Quaternion.Euler(0, 90, 0) * new Vector3(Camera.main.transform.forward.x, 0, Camera.main.transform.forward.z).normalized;
+        attractJob.AttMirrorGroups = AttMirrorGroups;
         #region Attraction
         attractJob.AttractionStrength = AttractionStrength;
         attractJob.AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength;
@@ -1008,6 +1128,10 @@ public class TheOtherFactor : MonoBehaviour
     struct AttractionJob : IJobParticleSystemParallelForBatch
     {
         #region Job Variables
+        [ReadOnly] public Vector3 MirrorPoint;
+        [ReadOnly] public Vector3 MirrorPoint2;
+        [ReadOnly] public Vector3 MirrorPlaneNormal;
+        [ReadOnly] public Vector4 AttMirrorGroups;
         #region Attraction
         [ReadOnly] public float AttractionStrength;
         [ReadOnly] public float AttractionExponentDivisor;
@@ -1092,35 +1216,130 @@ public class TheOtherFactor : MonoBehaviour
                 Vector3 velocityR = CalculateAttractionVelocity(directionToMeshR, distanceToMeshR, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
                                                                 ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedR[meshPosIndexR], PerParticleScaling[particleIndex].x);
                 #endregion
-                #region Compute Attraction to RLeft Hand
-                int meshPosIndexLM = MeshIndicesLM[particleIndex];
-                MeshIndicesLM[particleIndex] = (meshPosIndexLM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsLM.Length]) % MeshPositionsLM.Length;
 
-                Vector3 meshPosLM = MeshPositionsLM[meshPosIndexLM];
+                #region Compute Attraction to Left Mirror Hand
+                //int meshPosIndexLM = MeshIndicesLM[particleIndex];
+                //MeshIndicesLM[particleIndex] = (meshPosIndexLM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsLM.Length]) % MeshPositionsLM.Length;
+
+                //Vector3 meshPosLM = MeshPositionsLM[meshPosIndexLM];
+
+                // Compute the vector from the point on the plane to the original transform's position
+                Vector3 toTransform = meshPosL - MirrorPoint;
+
+                // Project this vector onto the plane's normal to find the distance from the plane
+                float distanceToPlane = Vector3.Dot(toTransform, MirrorPlaneNormal);
+
+                // The mirrored position is the original position moved by twice the distance to the plane, along the plane's normal
+                Vector3 meshPosLM = meshPosL - 2 * distanceToPlane * MirrorPlaneNormal;
+
                 Vector3 directionToMeshLM = meshPosLM - particlePos;
                 float distanceToMeshLM = math.length(directionToMeshLM);
 
+                //Vector3 velocityLM = CalculateAttractionVelocity(directionToMeshLM, distanceToMeshLM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                //                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedLM[meshPosIndexLM], PerParticleScaling[particleIndex].w);
                 Vector3 velocityLM = CalculateAttractionVelocity(directionToMeshLM, distanceToMeshLM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedLM[meshPosIndexLM], PerParticleScaling[particleIndex].w);
+                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].w);
                 #endregion
-                #region Compute Attraction to RRight Hand
-                int meshPosIndexRM = MeshIndicesRM[particleIndex];
-                MeshIndicesRM[particleIndex] = (meshPosIndexRM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsRM.Length]) % MeshPositionsRM.Length;
+                #region Compute Attraction to Right Mirror Hand
+                //int meshPosIndexRM = MeshIndicesRM[particleIndex];
+                //MeshIndicesRM[particleIndex] = (meshPosIndexRM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsRM.Length]) % MeshPositionsRM.Length;
 
-                Vector3 meshPosRM = MeshPositionsRM[meshPosIndexRM];
+                //Vector3 meshPosRM = MeshPositionsRM[meshPosIndexRM];
+                toTransform = meshPosR - MirrorPoint;
+
+                // Project this vector onto the plane's normal to find the distance from the plane
+                distanceToPlane = Vector3.Dot(toTransform, MirrorPlaneNormal);
+
+                // The mirrored position is the original position moved by twice the distance to the plane, along the plane's normal
+                Vector3 meshPosRM = meshPosR - 2 * distanceToPlane * MirrorPlaneNormal;
+
                 Vector3 directionToMeshRM = meshPosRM - particlePos;
                 float distanceToMeshRM = math.length(directionToMeshRM);
 
+                //Vector3 velocityRM = CalculateAttractionVelocity(directionToMeshRM, distanceToMeshRM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                //                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedRM[meshPosIndexRM], PerParticleScaling[particleIndex].z);
                 Vector3 velocityRM = CalculateAttractionVelocity(directionToMeshRM, distanceToMeshRM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedRM[meshPosIndexRM], PerParticleScaling[particleIndex].z);
+                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedR[meshPosIndexR], PerParticleScaling[particleIndex].z);
+                #endregion
+
+                #region Mirror Point 1
+                #region Compute Mirror Attraction to Left Hand
+                Vector3 meshPosLPm = MirrorPosition(meshPosL, MirrorPoint);
+                Vector3 directionToMeshLPm = meshPosLPm - particlePos;
+                float distanceToMeshLPm = math.length(directionToMeshLPm);
+
+                Vector3 velocityLPm = CalculateAttractionVelocity(directionToMeshLPm, distanceToMeshLPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].y);
+                #endregion
+                #region Compute Mirror Attraction to Right Hand
+                Vector3 meshPosRPm = MirrorPosition(meshPosR, MirrorPoint);
+                Vector3 directionToMeshRPm = meshPosRPm - particlePos;
+                float distanceToMeshRPm = math.length(directionToMeshRPm);
+
+                Vector3 velocityRPm = CalculateAttractionVelocity(directionToMeshRPm, distanceToMeshRPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].x);
+                #endregion
+                #region Compute Mirror Attraction to Left Mirror Hand
+                Vector3 meshPosLMPm = MirrorPosition(meshPosLM, MirrorPoint);
+                Vector3 directionToMeshLMPm = meshPosLMPm - particlePos;
+                float distanceToMeshLMPm = math.length(directionToMeshLMPm);
+
+                Vector3 velocityLMPm = CalculateAttractionVelocity(directionToMeshLMPm, distanceToMeshLMPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].w);
+                #endregion
+                #region Compute Mirror Attraction to Right Hand
+                Vector3 meshPosRMPm = MirrorPosition(meshPosRM, MirrorPoint);
+                Vector3 directionToMeshRMPm = meshPosRMPm - particlePos;
+                float distanceToMeshRMPm = math.length(directionToMeshRMPm);
+
+                Vector3 velocityRMPm = CalculateAttractionVelocity(directionToMeshRMPm, distanceToMeshRMPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].z);
+                #endregion
+                #endregion
+                #region Mirror Point 2
+                #region Compute Mirror Attraction to Left Hand
+                Vector3 meshPosLPm2 = MirrorPosition(meshPosL, MirrorPoint2);
+                Vector3 directionToMeshLPm2 = meshPosLPm2 - particlePos;
+                float distanceToMeshLPm2 = math.length(directionToMeshLPm2);
+
+                Vector3 velocityLPm2 = CalculateAttractionVelocity(directionToMeshLPm2, distanceToMeshLPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].y);
+                #endregion
+                #region Compute Mirror Attraction to Right Hand
+                Vector3 meshPosRPm2 = MirrorPosition(meshPosR, MirrorPoint2);
+                Vector3 directionToMeshRPm2 = meshPosRPm2 - particlePos;
+                float distanceToMeshRPm2 = math.length(directionToMeshRPm2);
+
+                Vector3 velocityRPm2 = CalculateAttractionVelocity(directionToMeshRPm2, distanceToMeshRPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].x);
+                #endregion
+                #region Compute Mirror Attraction to Left Mirror Hand
+                Vector3 meshPosLMPm2 = MirrorPosition(meshPosLM, MirrorPoint2);
+                Vector3 directionToMeshLMPm2 = meshPosLMPm2 - particlePos;
+                float distanceToMeshLMPm2 = math.length(directionToMeshLMPm2);
+
+                Vector3 velocityLMPm2 = CalculateAttractionVelocity(directionToMeshLMPm2, distanceToMeshLMPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].w);
+                #endregion
+                #region Compute Mirror Attraction to Right Hand
+                Vector3 meshPosRMPm2 = MirrorPosition(meshPosRM, MirrorPoint2);
+                Vector3 directionToMeshRMPm2 = meshPosRMPm2 - particlePos;
+                float distanceToMeshRMPm2 = math.length(directionToMeshRMPm2);
+
+                Vector3 velocityRMPm2 = CalculateAttractionVelocity(directionToMeshRMPm2, distanceToMeshRMPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].z);
+                #endregion
                 #endregion
 
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
-                velocities[particleIndex] = math.lerp(velocities[particleIndex], velocityL + velocityR + velocityLM + velocityRM, VelocityLerp);
+                velocities[particleIndex] = math.lerp(velocities[particleIndex], ((velocityL + velocityR) * AttMirrorGroups[0]) +
+                                                                                 ((velocityLM + velocityRM) * AttMirrorGroups[1]) +
+                                                                                 ((velocityLPm + velocityRPm + velocityLMPm + velocityRMPm) * AttMirrorGroups[2]) + 
+                                                                                 ((velocityLPm2 + velocityRPm2 + velocityLMPm2 + velocityRMPm2) * AttMirrorGroups[3]), VelocityLerp);
                 #endregion
                 #region Size
-                sizes[i] = ComputeParticleSize(distanceToMeshL, distanceToMeshR, distanceToMeshLM, distanceToMeshRM, DistanceForMinSize, ParticleSizeMinMax, SizeLerp, sizes[particleIndex]);// math.lerp(sizes[i], targetSize, SizeLerp);
+                sizes[i] = ComputeParticleSize(distanceToMeshL, distanceToMeshR, distanceToMeshLM, distanceToMeshRM, distanceToMeshLPm, distanceToMeshRPm, distanceToMeshLMPm, distanceToMeshRMPm, distanceToMeshLPm2, distanceToMeshRPm2, distanceToMeshLMPm2, distanceToMeshRMPm2, DistanceForMinSize, ParticleSizeMinMax, SizeLerp, sizes[particleIndex]);// math.lerp(sizes[i], targetSize, SizeLerp);
                 #endregion
                 #region Color
                 colors[particleIndex] = ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex, particles.count, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
@@ -1215,20 +1434,48 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Compute Particle Size
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private static float ComputeParticleSize(float distanceToMeshL, float distanceToMeshR, float distanceToMeshLM, float distanceToMeshRM, float distanceForMinSize, Vector2 particleSizeMinMax, float sizeLerp, float currentSize)
+        private static float ComputeParticleSize(
+            float distanceToMeshL, float distanceToMeshR,
+            float distanceToMeshLM, float distanceToMeshRM,
+            float distanceToMeshLPm, float distanceToMeshRPm,
+            float distanceToMeshLMPm, float distanceToMeshRMPm,
+            float distanceToMeshLPm2, float distanceToMeshRPm2,
+            float distanceToMeshLMPm2, float distanceToMeshRMPm2,
+            float distanceForMinSize, Vector2 particleSizeMinMax,
+            float sizeLerp, float currentSize)
         {
-            float leastDistance = math.min(distanceToMeshL, distanceToMeshR);
-            leastDistance = math.min(leastDistance, distanceToMeshLM);
-            leastDistance = math.min(leastDistance, distanceToMeshRM);
+            // Find the least distance among all the given distances efficiently
+            float leastDistance = math.min(
+                math.min(
+                    math.min(math.min(distanceToMeshL, distanceToMeshR), math.min(distanceToMeshLM, distanceToMeshRM)),
+                    math.min(math.min(distanceToMeshLPm, distanceToMeshRPm), math.min(distanceToMeshLMPm, distanceToMeshRMPm))
+                ),
+                math.min(
+                    math.min(distanceToMeshLPm2, distanceToMeshRPm2),
+                    math.min(distanceToMeshLMPm2, distanceToMeshRMPm2)
+                )
+            );
 
-            // Normalize the distance (0 at maxDistance or beyond, 1 at distance 0)
-            float normalizedDistance = math.clamp(leastDistance / distanceForMinSize, 0f, 1f);
-            float inverseNormalizedDistance = 1 - normalizedDistance;
-            float targetSize = math.lerp(particleSizeMinMax.x, particleSizeMinMax.y, inverseNormalizedDistance);
+            // Normalize the distance (0 at distanceForMinSize or beyond, 1 at distance 0)
+            float normalizedDistance = math.clamp(1f - (leastDistance / distanceForMinSize), 0f, 1f);
 
+            // Lerp between min and max particle size based on the normalized distance
+            float targetSize = math.lerp(particleSizeMinMax.x, particleSizeMinMax.y, normalizedDistance);
+
+            // Lerp between the current size and the target size
             float finalSize = math.lerp(currentSize, targetSize, sizeLerp);
 
             return finalSize;
+        }
+        #endregion
+        #region Mirror Position
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        private Vector3 MirrorPosition(Vector3 position, Vector3 mirrorPoint)
+        {
+            // Calculate the mirrored position about the mirrorPoint
+            Vector3 mirroredPosition = 2 * mirrorPoint - position;
+
+            return mirroredPosition;
         }
         #endregion
         #endregion
