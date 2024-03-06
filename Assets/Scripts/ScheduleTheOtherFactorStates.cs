@@ -42,7 +42,7 @@ public class FactorState
     #endregion
     #region Position Offsets
     public Vector2 PositionOffsetMinMax;
-    public bool RealTimeMirror;
+    public bool AttToReplay;
     public float MirrorDistance;
     #endregion
     #region Index Step Size
@@ -142,7 +142,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public Vector2 PositionOffsetMinMax = new Vector2(0f, .7f);
     #region Joint Mirror
     [Header("Joint Mirror")]
-    public bool RealTimeMirror = false;
+    public bool AttToReplay = false;
     public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
     #endregion
     #region Stretch
@@ -203,7 +203,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         #region Position Offsets
         tof.PositionOffsetMinMax = PositionOffsetMinMax;
         #region Joint Mirror
-        tof.RealTimeMirror = RealTimeMirror;
+        tof.AttractToReplay = AttToReplay;
         tof.MirrorDistance = MirrorDistance;
         #endregion
         #region Stretch
@@ -264,7 +264,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #region Position Offsets
             PositionOffsetMinMax = PositionOffsetMinMax,
             #region Joint Mirror
-            RealTimeMirror = RealTimeMirror,
+            AttToReplay = AttToReplay,
             MirrorDistance = MirrorDistance,
             #endregion
             #region Stretch
@@ -322,8 +322,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.IndexStepSizeMinMax = state.IndexStepSizeMinMax;
         IndexStepSizeMinMax = state.IndexStepSizeMinMax;
         #endregion
-        tof.RealTimeMirror = state.RealTimeMirror;
-        RealTimeMirror = state.RealTimeMirror;
+        tof.AttractToReplay = state.AttToReplay;
+        AttToReplay = state.AttToReplay;
         tof.DisplayOculusHands = state.DisplayOculusHands;
         DisplayOculusHands = state.DisplayOculusHands;
         #region Particles
@@ -366,8 +366,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         #endregion
         #region Position Offsets
         #region Joint Mirror
-        tof.RealTimeMirror = state.RealTimeMirror;
-        RealTimeMirror = state.RealTimeMirror;
+        tof.AttractToReplay = state.AttToReplay;
+        AttToReplay = state.AttToReplay;
         tof.MirrorDistance = state.MirrorDistance;
         MirrorDistance = state.MirrorDistance;
         #endregion
@@ -555,7 +555,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         // Joint Mirror Section
         sb.AppendLine("\nJoint Mirror:");
-        sb.AppendLine($"Real Time Mirror: {RealTimeMirror}");
+        sb.AppendLine($"Att To Replay: {AttToReplay}");
         sb.AppendLine($"Mirror Distance: {MirrorDistance}");
 
         // Stretch Section

@@ -65,12 +65,12 @@ public class TheOtherFactor : MonoBehaviour
     public Vector2 PositionOffsetMinMax = new Vector2(0f, .7f);
     #region Joint Mirror
     [Header("Joint Mirror")]
-    public bool RealTimeMirror = false;
+    public bool AttractToReplay = false;
     public Transform MirrorPoint;
     public Transform MirrorPoint2;
     public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
     private Vector3 mirrorPlanePosition;
-    private Vector3 mirrorPlaneNormal;
+    private Vector3 mirrorPlaneNormalRotated;
     #endregion
     #region Stretch
     [Header("Stretch")]
@@ -318,7 +318,7 @@ public class TheOtherFactor : MonoBehaviour
         Vector3 rotatedForward = rotation * forwardHorizontal; // Apply the rotation to the forwardHorizontal vector
 
         mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * MirrorDistance;
-        mirrorPlaneNormal = rotatedForward;
+        mirrorPlaneNormalRotated = rotatedForward;
         Vector3  MirrorPointPosition = mirrorPlanePosition;
         MirrorPointPosition.y = 1.25f;
         MirrorPoint.position = MirrorPointPosition;
@@ -505,7 +505,7 @@ public class TheOtherFactor : MonoBehaviour
         {
             MirrorPoint = MirrorPoint.position,
             MirrorPoint2 = MirrorPoint2.position,
-            MirrorPlaneNormal = mirrorPlaneNormal,
+            MirrorPlaneNormal = mirrorPlaneNormalRotated,
             AttMirrorGroups = AttMirrorGroups,
             #region Attraction
             AttractionStrength = AttractionStrength,
@@ -524,22 +524,22 @@ public class TheOtherFactor : MonoBehaviour
             #region Positions
             MeshPositionsL = MeshPositionsL,
             MeshPositionsR = MeshPositionsR,
-            MeshPositionsLM = MeshPositionsRL,
-            MeshPositionsRM = MeshPositionsRR,
+            MeshPositionsL2 = MeshPositionsRL,
+            MeshPositionsR2 = MeshPositionsRR,
             #endregion
             #region Indices
             MeshIndicesL = MeshIndicesL,
             MeshIndicesR = MeshIndicesR,
-            MeshIndicesLM = MeshIndicesRL,
-            MeshIndicesRM = MeshIndicesRR,
+            MeshIndicesL2 = MeshIndicesRL,
+            MeshIndicesR2 = MeshIndicesRR,
             IndexStepSizes = IndexStepSizes,
             IndexStepsSizeIndex = 0,
             #endregion
             #region Joint Distance Moved
             JointDistanceMovedL = a_JointDistanceMovedL,
             JointDistanceMovedR = a_JointDistanceMovedR,
-            JointDistanceMovedLM = a_JointDistanceMovedRL,
-            JointDistanceMovedRM = a_JointDistanceMovedRR,
+            JointDistanceMovedL2 = a_JointDistanceMovedRL,
+            JointDistanceMovedR2 = a_JointDistanceMovedRR,
             #endregion
             #endregion
             #region Color
@@ -835,14 +835,9 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Stretch
                 for (int i = 0; i < updateMeshJobL.StretchFactor.Length; i++)
                 {
-                    if (updateMeshJobL.StretchFactor[i] < StretchMax)
-                    {
-                        updateMeshJobL.StretchFactor[i] = updateMeshJobL.StretchFactor[i] + StretchFactorIncrease[i];
-                    }
-                    else
-                    {
-                        updateMeshJobL.StretchFactor[i] = StretchMax;
-                    }
+                    Vector3 toTransform = updateMeshJobL.DynamicMeshPositions[i] - mirrorPlanePosition;
+                    float distanceToPlane = math.length(toTransform);
+                    updateMeshJobL.StretchFactor[i] = updateMeshJobL.StretchFactor[i] < distanceToPlane ? updateMeshJobL.StretchFactor[i] + StretchFactorIncrease[i] : distanceToPlane;
                 }
                 #endregion
                 if (updateMeshJobL.JointPositions.Length > 0) updateMeshJobHandleL = updateMeshJobL.Schedule(updateMeshJobL.BaseMeshPositions.Length, 1024);
@@ -867,45 +862,44 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Stretch
                 for (int i = 0; i < updateMeshJobR.StretchFactor.Length; i++)
                 {
-                    if (updateMeshJobR.StretchFactor[i] < StretchMax)
-                    {
-                        updateMeshJobR.StretchFactor[i] = updateMeshJobR.StretchFactor[i] + StretchFactorIncrease[i];
-                    }
-                    else
-                    {
-                        updateMeshJobR.StretchFactor[i] = StretchMax;
-                    }
+                    Vector3 toTransform = updateMeshJobR.DynamicMeshPositions[i] - mirrorPlanePosition;
+                    float distanceToPlane = math.length(toTransform);
+                    updateMeshJobR.StretchFactor[i] = updateMeshJobR.StretchFactor[i] < distanceToPlane ? updateMeshJobR.StretchFactor[i] + StretchFactorIncrease[i] : distanceToPlane;
                 }
                 #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (updateMeshJobR.JointPositions.Length > 0) updateMeshJobHandleR = updateMeshJobR.Schedule(updateMeshJobR.BaseMeshPositions.Length, 1024);
                 #endregion
-                if (RealTimeMirror)
+                if (AttractToReplay)
                 {
                 #region Update Mesh Job LM
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobLM.JointPositions.Length; i++)
                 {
-                    updateMeshJobLM.JointPositions[i] = LMJoints[i].position;
+                    Vector3 toTransform = LJoints[i].position - mirrorPlanePosition;
+                    float distanceToPlane = Vector3.Dot(toTransform, stretchPlaneNormal);
+                    Vector3 mirroredPosition = LMJoints[i].position - 2 * distanceToPlane * stretchPlaneNormal;
+
+                    updateMeshJobLM.JointPositions[i] = mirroredPosition;
                     updateMeshJobLM.JointRotations[i] = LMJoints[i].rotation;
                 }
                 #endregion
                 #region Update Joint Distance Moved in Attraction Job
-                attractJob.JointDistanceMovedLM = updateMeshJobLM.JointDistanceMoved;
+                attractJob.JointDistanceMovedL2 = updateMeshJobLM.JointDistanceMoved;
                 #endregion
                 #region Update Mesh Positions in Attraction Job
-                attractJob.MeshPositionsLM = updateMeshJobLM.DynamicMeshPositions;
+                attractJob.MeshPositionsL2 = updateMeshJobLM.DynamicMeshPositions;
                 #endregion
                 #region Update PositionOffsetsIndex
                 updateMeshJobLM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
-                #region Update Stretch (not active)
-                /*
+                #region Update Stretch
                 for (int i = 0; i < updateMeshJobLM.StretchFactor.Length; i++)
                 {
-                    updateMeshJobLM.StretchFactor[i] = updateMeshJobLM.StretchFactor[i] < StretchMax ? updateMeshJobLM.StretchFactor[i] + StretchFactorIncrease[i] : StretchMax;
+                        Vector3 toTransform = updateMeshJobLM.DynamicMeshPositions[i] - mirrorPlanePosition;
+                        float distanceToPlane = math.length(toTransform);
+                        updateMeshJobLM.StretchFactor[i] = updateMeshJobLM.StretchFactor[i] > -distanceToPlane ? updateMeshJobLM.StretchFactor[i] - StretchFactorIncrease[i] : -distanceToPlane;
                 }
-                */
                 #endregion
                 if (updateMeshJobLM.JointPositions.Length > 0) updateMeshJobHandleLM = updateMeshJobLM.Schedule(updateMeshJobLM.BaseMeshPositions.Length, 1024);
                 #endregion
@@ -913,26 +907,30 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Joint Positions
                 for (int i = 0; i < updateMeshJobRM.JointPositions.Length; i++)
                 {
-                    updateMeshJobRM.JointPositions[i] = RMJoints[i].position;
+                    Vector3 toTransform = RJoints[i].position - mirrorPlanePosition;
+                    float distanceToPlane = Vector3.Dot(toTransform, stretchPlaneNormal);
+                    Vector3 mirroredPosition = RMJoints[i].position - 2 * distanceToPlane * stretchPlaneNormal;
+
+                    updateMeshJobRM.JointPositions[i] = mirroredPosition;
                     updateMeshJobRM.JointRotations[i] = RMJoints[i].rotation;
                 }
                 #endregion
                 #region Update Joint Distance Moved
-                attractJob.JointDistanceMovedRM = updateMeshJobRM.JointDistanceMoved;
+                attractJob.JointDistanceMovedR2 = updateMeshJobRM.JointDistanceMoved;
                 #endregion
                 #region Update Mesh Positions in Attraction Job
-                attractJob.MeshPositionsRM = updateMeshJobRM.DynamicMeshPositions;
+                attractJob.MeshPositionsR2 = updateMeshJobRM.DynamicMeshPositions;
                 #endregion
                 #region Update PositionOffsetsIndex
                 updateMeshJobRM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
-                #region Update Stretch (not active)
-                /*
+                #region Update Stretch
                 for (int i = 0; i < updateMeshJobRM.StretchFactor.Length; i++)
                 {
-                    updateMeshJobRM.StretchFactor[i] = updateMeshJobRM.StretchFactor[i] < StretchMax ? updateMeshJobRM.StretchFactor[i] + StretchFactorIncrease[i] : StretchMax;
+                    Vector3 toTransform = updateMeshJobRM.DynamicMeshPositions[i] - mirrorPlanePosition;
+                    float distanceToPlane = math.length(toTransform);
+                    updateMeshJobRM.StretchFactor[i] = updateMeshJobRM.StretchFactor[i] > -distanceToPlane ? updateMeshJobRM.StretchFactor[i] - StretchFactorIncrease[i] : -distanceToPlane;
                 }
-                */
                 #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (updateMeshJobRM.JointPositions.Length > 0) updateMeshJobHandleRM = updateMeshJobRM.Schedule(updateMeshJobRM.BaseMeshPositions.Length, 1024);
@@ -970,7 +968,7 @@ public class TheOtherFactor : MonoBehaviour
     {
         attractJob.MirrorPoint = MirrorPoint.position;
         attractJob.MirrorPoint2 = MirrorPoint2.position;
-        attractJob.MirrorPlaneNormal = Quaternion.Euler(0, 90, 0) * new Vector3(Camera.main.transform.forward.x, 0, Camera.main.transform.forward.z).normalized;
+        //attractJob.MirrorPlaneNormal = Quaternion.Euler(0, 90, 0) * new Vector3(Camera.main.transform.forward.x, 0, Camera.main.transform.forward.z).normalized;
         attractJob.AttMirrorGroups = AttMirrorGroups;
         #region Attraction
         attractJob.AttractionStrength = AttractionStrength;
@@ -1149,22 +1147,22 @@ public class TheOtherFactor : MonoBehaviour
         #region Positions
         [ReadOnly] public NativeArray<Vector3> MeshPositionsL;
         [ReadOnly] public NativeArray<Vector3> MeshPositionsR;
-        [ReadOnly] public NativeArray<Vector3> MeshPositionsLM;
-        [ReadOnly] public NativeArray<Vector3> MeshPositionsRM;
+        [ReadOnly] public NativeArray<Vector3> MeshPositionsL2;
+        [ReadOnly] public NativeArray<Vector3> MeshPositionsR2;
         #endregion
         #region Indices
         public NativeArray<int> MeshIndicesL;
         public NativeArray<int> MeshIndicesR;
-        public NativeArray<int> MeshIndicesLM;
-        public NativeArray<int> MeshIndicesRM;
+        public NativeArray<int> MeshIndicesL2;
+        public NativeArray<int> MeshIndicesR2;
         [ReadOnly] public NativeArray<int> IndexStepSizes;
         [ReadOnly] public int IndexStepsSizeIndex;
         #endregion
         #region Joint Distance Moved
         [ReadOnly] public NativeArray<float> JointDistanceMovedL;
         [ReadOnly] public NativeArray<float> JointDistanceMovedR;
-        [ReadOnly] public NativeArray<float> JointDistanceMovedLM;
-        [ReadOnly] public NativeArray<float> JointDistanceMovedRM;
+        [ReadOnly] public NativeArray<float> JointDistanceMovedL2;
+        [ReadOnly] public NativeArray<float> JointDistanceMovedR2;
         #endregion
         #endregion
         #region Color
@@ -1217,12 +1215,34 @@ public class TheOtherFactor : MonoBehaviour
                                                                 ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedR[meshPosIndexR], PerParticleScaling[particleIndex].x);
                 #endregion
 
+                #region Compute Attraction to Left Replay
+                int meshPosIndexL2 = MeshIndicesL2[particleIndex];
+                MeshIndicesL2[particleIndex] = (meshPosIndexL2 + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsL2.Length]) % MeshPositionsL2.Length;
+
+                Vector3 meshPosL2 = MeshPositionsL2[meshPosIndexL2];
+
+                Vector3 directionToMeshL2 = meshPosL2 - particlePos;
+                float distanceToMeshL2 = math.length(directionToMeshL2);
+
+                Vector3 velocityL2 = CalculateAttractionVelocity(directionToMeshL2, distanceToMeshL2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL2[meshPosIndexL2], PerParticleScaling[particleIndex].w);
+                #endregion
+                #region Compute Attraction to Right Replay
+                int meshPosIndexR2 = MeshIndicesR2[particleIndex];
+                MeshIndicesR2[particleIndex] = (meshPosIndexR2 + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsR2.Length]) % MeshPositionsR2.Length;
+
+                Vector3 meshPosR2 = MeshPositionsR2[meshPosIndexR2];
+
+                Vector3 directionToMeshR2 = meshPosR2 - particlePos;
+                float distanceToMeshR2 = math.length(directionToMeshR2);
+
+                Vector3 velocityR2 = CalculateAttractionVelocity(directionToMeshR2, distanceToMeshR2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
+                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedR2[meshPosIndexR2], PerParticleScaling[particleIndex].z);
+                #endregion
+
+                #region Mirrors
+                #region Mirror Plane
                 #region Compute Attraction to Left Mirror Hand
-                //int meshPosIndexLM = MeshIndicesLM[particleIndex];
-                //MeshIndicesLM[particleIndex] = (meshPosIndexLM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsLM.Length]) % MeshPositionsLM.Length;
-
-                //Vector3 meshPosLM = MeshPositionsLM[meshPosIndexLM];
-
                 // Compute the vector from the point on the plane to the original transform's position
                 Vector3 toTransform = meshPosL - MirrorPoint;
 
@@ -1235,16 +1255,10 @@ public class TheOtherFactor : MonoBehaviour
                 Vector3 directionToMeshLM = meshPosLM - particlePos;
                 float distanceToMeshLM = math.length(directionToMeshLM);
 
-                //Vector3 velocityLM = CalculateAttractionVelocity(directionToMeshLM, distanceToMeshLM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                //                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedLM[meshPosIndexLM], PerParticleScaling[particleIndex].w);
                 Vector3 velocityLM = CalculateAttractionVelocity(directionToMeshLM, distanceToMeshLM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].w);
+                                                ParticlesAttractionGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].y);
                 #endregion
                 #region Compute Attraction to Right Mirror Hand
-                //int meshPosIndexRM = MeshIndicesRM[particleIndex];
-                //MeshIndicesRM[particleIndex] = (meshPosIndexRM + IndexStepSizes[(particleIndex + IndexStepsSizeIndex) % MeshPositionsRM.Length]) % MeshPositionsRM.Length;
-
-                //Vector3 meshPosRM = MeshPositionsRM[meshPosIndexRM];
                 toTransform = meshPosR - MirrorPoint;
 
                 // Project this vector onto the plane's normal to find the distance from the plane
@@ -1256,12 +1270,10 @@ public class TheOtherFactor : MonoBehaviour
                 Vector3 directionToMeshRM = meshPosRM - particlePos;
                 float distanceToMeshRM = math.length(directionToMeshRM);
 
-                //Vector3 velocityRM = CalculateAttractionVelocity(directionToMeshRM, distanceToMeshRM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                //                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedRM[meshPosIndexRM], PerParticleScaling[particleIndex].z);
                 Vector3 velocityRM = CalculateAttractionVelocity(directionToMeshRM, distanceToMeshRM, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedR[meshPosIndexR], PerParticleScaling[particleIndex].z);
+                                                ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedR[meshPosIndexR], PerParticleScaling[particleIndex].x);
                 #endregion
-
+                #endregion
                 #region Mirror Point 1
                 #region Compute Mirror Attraction to Left Hand
                 Vector3 meshPosLPm = MirrorPosition(meshPosL, MirrorPoint);
@@ -1285,7 +1297,7 @@ public class TheOtherFactor : MonoBehaviour
                 float distanceToMeshLMPm = math.length(directionToMeshLMPm);
 
                 Vector3 velocityLMPm = CalculateAttractionVelocity(directionToMeshLMPm, distanceToMeshLMPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].w);
+                                                                ParticlesAttractionGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].y);
                 #endregion
                 #region Compute Mirror Attraction to Right Hand
                 Vector3 meshPosRMPm = MirrorPosition(meshPosRM, MirrorPoint);
@@ -1293,7 +1305,7 @@ public class TheOtherFactor : MonoBehaviour
                 float distanceToMeshRMPm = math.length(directionToMeshRMPm);
 
                 Vector3 velocityRMPm = CalculateAttractionVelocity(directionToMeshRMPm, distanceToMeshRMPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].z);
+                                                                ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].x);
                 #endregion
                 #endregion
                 #region Mirror Point 2
@@ -1319,7 +1331,7 @@ public class TheOtherFactor : MonoBehaviour
                 float distanceToMeshLMPm2 = math.length(directionToMeshLMPm2);
 
                 Vector3 velocityLMPm2 = CalculateAttractionVelocity(directionToMeshLMPm2, distanceToMeshLMPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                                ParticlesAttractionGroups[particleIndex].z, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].w);
+                                                                ParticlesAttractionGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], PerParticleScaling[particleIndex].y);
                 #endregion
                 #region Compute Mirror Attraction to Right Hand
                 Vector3 meshPosRMPm2 = MirrorPosition(meshPosRM, MirrorPoint2);
@@ -1327,16 +1339,19 @@ public class TheOtherFactor : MonoBehaviour
                 float distanceToMeshRMPm2 = math.length(directionToMeshRMPm2);
 
                 Vector3 velocityRMPm2 = CalculateAttractionVelocity(directionToMeshRMPm2, distanceToMeshRMPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, AttByDistRange,
-                                                                ParticlesAttractionGroups[particleIndex].w, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].z);
+                                                                ParticlesAttractionGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], PerParticleScaling[particleIndex].x);
                 #endregion
                 #endregion
-
+                #endregion
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
-                velocities[particleIndex] = math.lerp(velocities[particleIndex], ((velocityL + velocityR) * AttMirrorGroups[0]) +
-                                                                                 ((velocityLM + velocityRM) * AttMirrorGroups[1]) +
-                                                                                 ((velocityLPm + velocityRPm + velocityLMPm + velocityRMPm) * AttMirrorGroups[2]) + 
-                                                                                 ((velocityLPm2 + velocityRPm2 + velocityLMPm2 + velocityRMPm2) * AttMirrorGroups[3]), VelocityLerp);
+                velocities[particleIndex] = math.lerp(velocities[particleIndex], velocityL2 + velocityR2 +
+                                                                                 (AttMirrorGroups[0] * (velocityL + velocityR)) +
+                                                                                 (AttMirrorGroups[1] * (velocityLM + velocityRM)) +
+                                                                                 (AttMirrorGroups[2] * (velocityLPm + velocityRPm)) + 
+                                                                                 (AttMirrorGroups[2] * AttMirrorGroups[1] * (velocityLMPm + velocityRMPm)) +
+                                                                                 (AttMirrorGroups[3] * (velocityLPm2 + velocityRPm2)) + 
+                                                                                 (AttMirrorGroups[3] * AttMirrorGroups[1] * (velocityLMPm2 + velocityRMPm2)), VelocityLerp);
                 #endregion
                 #region Size
                 sizes[i] = ComputeParticleSize(distanceToMeshL, distanceToMeshR, distanceToMeshLM, distanceToMeshRM, distanceToMeshLPm, distanceToMeshRPm, distanceToMeshLMPm, distanceToMeshRMPm, distanceToMeshLPm2, distanceToMeshRPm2, distanceToMeshLMPm2, distanceToMeshRMPm2, DistanceForMinSize, ParticleSizeMinMax, SizeLerp, sizes[particleIndex]);// math.lerp(sizes[i], targetSize, SizeLerp);
@@ -1568,16 +1583,16 @@ public class TheOtherFactor : MonoBehaviour
         #region Dispose Mesh Positions Arrays
         if (attractJob.MeshPositionsL.IsCreated) attractJob.MeshPositionsL.Dispose();
         if (attractJob.MeshPositionsR.IsCreated) attractJob.MeshPositionsR.Dispose();
-        if (attractJob.MeshPositionsLM.IsCreated) attractJob.MeshPositionsLM.Dispose();
-        if (attractJob.MeshPositionsRM.IsCreated) attractJob.MeshPositionsRM.Dispose();
+        if (attractJob.MeshPositionsL2.IsCreated) attractJob.MeshPositionsL2.Dispose();
+        if (attractJob.MeshPositionsR2.IsCreated) attractJob.MeshPositionsR2.Dispose();
         #endregion
 
         #region Dispose Mesh Indices Arrays
         // Assuming MeshIndices are part of attractJob or another job, update accordingly
         if (attractJob.MeshIndicesL.IsCreated) attractJob.MeshIndicesL.Dispose();
         if (attractJob.MeshIndicesR.IsCreated) attractJob.MeshIndicesR.Dispose();
-        if (attractJob.MeshIndicesLM.IsCreated) attractJob.MeshIndicesLM.Dispose();
-        if (attractJob.MeshIndicesRM.IsCreated) attractJob.MeshIndicesRM.Dispose();
+        if (attractJob.MeshIndicesL2.IsCreated) attractJob.MeshIndicesL2.Dispose();
+        if (attractJob.MeshIndicesR2.IsCreated) attractJob.MeshIndicesR2.Dispose();
         #endregion
 
         #region Dispose Attraction Scaling Arrays
@@ -1589,8 +1604,8 @@ public class TheOtherFactor : MonoBehaviour
         #region Dispose Joint Distance Moved Arrays
         if (attractJob.JointDistanceMovedL.IsCreated) attractJob.JointDistanceMovedL.Dispose();
         if (attractJob.JointDistanceMovedR.IsCreated) attractJob.JointDistanceMovedR.Dispose();
-        if (attractJob.JointDistanceMovedLM.IsCreated) attractJob.JointDistanceMovedLM.Dispose();
-        if (attractJob.JointDistanceMovedRM.IsCreated) attractJob.JointDistanceMovedRM.Dispose();
+        if (attractJob.JointDistanceMovedL2.IsCreated) attractJob.JointDistanceMovedL2.Dispose();
+        if (attractJob.JointDistanceMovedR2.IsCreated) attractJob.JointDistanceMovedR2.Dispose();
         #endregion
         #endregion
         #region Dispose UpdateMeshJobs

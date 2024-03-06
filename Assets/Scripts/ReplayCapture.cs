@@ -99,11 +99,8 @@ public class ReplayCapture : MonoBehaviour
             rotationList.RemoveAt(0);
             positionList.Add(position);
             rotationList.Add(rotation);
-            if (!tof.RealTimeMirror)
-            {
-                ReplayMovement(leftHandJointsOutput, 0);
-                ReplayMovement(rightHandJointsOutput, 0);
-            }
+            ReplayMovement(leftHandJointsOutput, 0);
+            ReplayMovement(rightHandJointsOutput, 0);
         }
     }
     void ReplayMovement(List<Transform> outputTransforms, int index)
@@ -116,13 +113,13 @@ public class ReplayCapture : MonoBehaviour
             if (positionList.Count > index && rotationList.Count > index)
             {
                 // Mirror the position by negating the Z-coordinate
-                Vector3 mirroredPosition = positionList[index];
-                mirroredPosition.z = -mirroredPosition.z; // Adjust Z based on mirror's position in the world
+                //Vector3 mirroredPosition = positionList[index];
+                //mirroredPosition.z = -mirroredPosition.z; // Adjust Z based on mirror's position in the world
 
                 // Mirror the rotation by inverting the rotation around the Y-axis
-                Quaternion mirroredRotation = MirrorRotation(rotationList[index], Vector3.up);
+                //Quaternion mirroredRotation = MirrorRotation(rotationList[index], Vector3.up);
 
-                outputTransform.position = mirroredPosition;
+                outputTransform.position = positionList[index];//mirroredPosition;
                 outputTransform.rotation = rotationList[index];// mirroredRotation;
             }
         }
