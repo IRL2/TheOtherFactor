@@ -181,7 +181,7 @@ public class PseudoMeshCreator : MonoBehaviour
         string[] thumbOrder = { "0", "1", "2", "3" };// { "0", "1", "3", "2" };
         string[] fingerOrder = { "1", "2", "3" };//{ "1", "3", "2" };
 
-        string handTypeShort = handType == "right" ? "r" : "l";
+        string handTypeShort = handType == "right" ? "Rminor" : "l";
 
         // Process thumb joints
         foreach (var index in thumbOrder)

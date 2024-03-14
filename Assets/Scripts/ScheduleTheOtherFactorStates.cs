@@ -12,41 +12,53 @@ public class FactorState
     public string Name;
     #endregion
     #region Inspector Variables
-    public bool DisplayOculusHands;
+    #region Attraction
+    public float AttractionStrength;
+    public float VelocityLerp;
+    public float DistForMinAtt;
+    public float MinAtt;
+    public float AttToOgHands;
+    public float AttToPlaneMirror;
+    public float AttToPointMirror1;
+    public float AttToPointMirror2;
+    public float AttToReplay;
+    public float AttToTorus;
+    public float AttToTorusMirror;
+    #endregion
+    #region Particle Group Bias
+    public Vector2 GroupBiasRange;
+    public float GroupBiasRangeExp;
+    public Vector4 AttGroup1;
+    public int HandBiasG1;
+    public Vector4 AttGroup2;
+    public int HandBiasG2;
+    public Vector4 AttGroup3;
+    public int HandBiasG3;
+    public Vector4 AttGroup4;
+    public int HandBiasG4;
+    #endregion
+    #region Positions
+    public Vector2 IndexStepSizeRange;
+    public Vector2 PosOffsetRange;
+    public Vector2 StretchFactorRange = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
+    public float StretchMax = 1f;
+    public float MirrorDistance;
+    #endregion
+    #region Torus
+    [Header("Torus")]
+    public Vector2 TorusRadiusRange;
+    public float TorusWraps;
+    public float TorusGradientWidth;
+    public float TorusGradientSpeed;
+    public Vector2 TorusGradientRange;
+    #endregion
     #region Particles
     public int ParticlesPerHand;
-    public Vector2 ParticleSizeMinMax;
+    public Vector2 ParticleSizeRange;
     public float DistanceForMinSize;
     public float SizeLerp;
     public Material ParticleMaterial;
-    #endregion
-    #region Attraction
-    public float AttractionStrength;
-    public float DistForMinAtt;
-    public Vector2 AttByDistRange;
-    public Vector4 AttMirrorGroups;
-    #endregion
-    #region Velocity
-    public float VelocityLerp;
-    #endregion
-    #region Attraction Scaling Per Group/Hand
-    public Vector4 ParticlesAttractionGroup1;
-    public Vector4 ParticlesAttractionGroup2;
-    public Vector4 ParticlesAttractionGroup3;
-    public Vector4 ParticlesAttractionGroup4;
-    #endregion
-    #region Per Particle Scaling
-    public Vector2 PerParticleScalingMinMax;
-    public float PerParticleScalingExponent;
-    public string PerParticleScalingGroups;
-    #endregion
-    #region Position Offsets
-    public Vector2 PositionOffsetMinMax;
-    public bool AttToReplay;
-    public float MirrorDistance;
-    #endregion
-    #region Index Step Size
-    public Vector2 IndexStepSizeMinMax;
     #endregion
     #region Color
     public bool UseDebugColors;
@@ -55,12 +67,8 @@ public class FactorState
     public float ColorLerp;
     public float HeartbeatSpeed;
     public bool UseHeartbeat;
-    public Vector2 AlphaMinMax;
-    #endregion
-    #region Stretch
-    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
-    public float StretchMax = 1f;
+    public Vector2 AlphaRange;
+    public bool DisplayOculusHands;
     #endregion
     #endregion
 }
@@ -92,70 +100,74 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #endregion
     #region Preset Variables
     [Header("Preset Variables")]
-    public bool DisplayOculusHands = false;
+    #region Attraction
+    [Header("Attraction")]
+    public float AttractionStrength = 1f;
+    [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
+    public float VelocityLerp = .1f;
+    public float DistForMinAtt = 1f;
+    public float MinAtt = .33f;
+    public float AttToOgHands = 1f;
+    public float AttToPlaneMirror = 0f;
+    public float AttToPointMirror1 = 0f;
+    public float AttToPointMirror2 = 0f;
+    public float AttToReplay = 0f;
+    public float AttToTorus = 0f;
+    public float AttToTorusMirror = 0f;
+    #endregion
+    #region Particle Group Bias
+    [Header("Particle Group Bias")]
+    public Vector2 GroupBiasRange = new Vector2(0f, 1f);
+    public float GroupBiasRangeExp = .1f;
+    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
+    public Vector4 AttGroup1 = Vector4.one;
+    [Range(0, 3)]
+    public int HandBiasG1 = 0;
+    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
+    public Vector4 AttGroup2 = Vector4.one;
+    [Range(0, 3)]
+    public int HandBiasG2 = 0;
+    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
+    public Vector4 AttGroup3 = Vector4.one;
+    [Range(0, 3)]
+    public int HandBiasG3 = 1;
+    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
+    public Vector4 AttGroup4 = Vector4.one;
+    [Range(0, 3)]
+    public int HandBiasG4 = 1;
+    #endregion
+    #region Positions
+    [Header("Positions")]
+    [Tooltip("The min and max size step a particle can take in the array that holds all mesh positions. 0-0 = particles stick to one position. 1-1 = particles always progress 1 position each update. 0-2 = particles might stay in place, move ahead one position or 2 positions in one update.")]
+    public Vector2 IndexStepSizeRange = new Vector2(0, 2);
+    [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
+    public Vector2 PosOffsetRange = new Vector2(0f, .7f);
+    public Vector2 StretchFactorRange = new Vector2(0f, 1f);
+    public float StretchFactorExponent = 1f;
+    public float StretchMax = 1f;
+    public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
+    #endregion
+    #region Torus
+    [Header("Torus")]
+    public Vector2 TorusRadiusRange = new Vector2(.0000001f, 1f);
+    public float TorusWraps = 1.0f;
+    public float TorusGradientWidth = 1.0f;
+    public float TorusGradientSpeed = 1.0f;
+    public Vector2 TorusGradientRange = new Vector2(.01f, .21f);
+    private SnakingTorusParticles STP = new SnakingTorusParticles();
+    #endregion
     #region Particles
     [Header("Particles")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public int ParticlesPerHand = 35000;
     [Tooltip("The min and max values for aprticle size, max reached at 0 distance from joint, min reached at DistanceForMinSize.")]
-    public Vector2 ParticleSizeMinMax = new Vector2(.003f, .008f);
-    [Tooltip("The distance between particle and joint at which the particle size reaches ParticleSizeMinMax.x")]
+    public Vector2 ParticleSizeRange = new Vector2(.003f, .008f);
+    [Tooltip("The distance between particle and joint at which the particle size reaches ParticleSizeRange.x")]
     public float DistanceForMinSize = .008f;
     [Tooltip("The linear interpolation factor for size change in one update.")]
     public float SizeLerp = .05f;
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Material ParticleMaterial;
-    #endregion
-    #region Attraction
-    [Header("Attraction")]
-    public float AttractionStrength = 1f;
-    public float DistForMinAtt = 1f;
-    public Vector2 AttByDistRange = new Vector2(0f, 1f);
-    public Vector4 AttMirrorGroups = Vector4.one;
-    #endregion
-    #region Velocity
-    [Header("Velocity")]
-    [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
-    public float VelocityLerp = .1f;
-    #endregion
-    #region Attraction Scaling Per Group/Hand
-    [Header("Attraction Scaling Per Group/Hand")]
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
-    public Vector4 ParticlesAttractionGroup1 = Vector4.one;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
-    public Vector4 ParticlesAttractionGroup2 = Vector4.one;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
-    public Vector4 ParticlesAttractionGroup3 = Vector4.one;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
-    public Vector4 ParticlesAttractionGroup4 = Vector4.one;
-    #region Per Particle Scaling
-    [Header("Per Particle Scaling")]
-    public Vector2 PerParticleScalingMinMax = new Vector2(0f, 1f);
-    public float PerParticleScalingExponent = .1f;
-    public string PerParticleScalingGroups = "xyzw";
-    #endregion
-    #endregion
-    #region Position Offsets
-    // should not really be here because it belongs to positions job, but looks better in inspector. need create custom inspector
-    [Header("Position Offsets")]
-    [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
-    public Vector2 PositionOffsetMinMax = new Vector2(0f, .7f);
-    #region Joint Mirror
-    [Header("Joint Mirror")]
-    public bool AttToReplay = false;
-    public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
-    #endregion
-    #region Stretch
-    [Header("Stretch")]
-    public Vector2 StretchFactorMinMax = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
-    public float StretchMax = 1f;
-    #endregion
-    #endregion
-    #region Index Step Size
-    [Header("Index Step Size")]
-    [Tooltip("The min and max size step a particle can take in the array that holds all mesh positions. 0-0 = particles stick to one position. 1-1 = particles always progress 1 position each update. 0-2 = particles might stay in place, move ahead one position or 2 positions in one update.")]
-    public Vector2 IndexStepSizeMinMax = new Vector2(0, 2);
     #endregion
     #region Color
     [Header("Color")]
@@ -166,54 +178,53 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public float ColorLerp = .05f;
     public float HeartbeatSpeed = 1f;
     public bool UseHeartbeat = true;
-    public Vector2 AlphaMinMax = new Vector2(.2f, .7f);
+    public Vector2 AlphaRange = new Vector2(.2f, .7f);
+    public bool DisplayOculusHands = false;
     #endregion
     #endregion
     #endregion
     private void UpdateTOF()
     {
         tof.DisplayOculusHands = DisplayOculusHands;
-        #region Particles
-        tof.ParticlesPerHand = ParticlesPerHand;
-        tof.ParticleSizeMinMax = ParticleSizeMinMax;
-        tof.DistanceForMinSize = DistanceForMinSize;
-        tof.SizeLerp = SizeLerp;
-        tof.ParticleMaterial = ParticleMaterial;
-        #endregion
-        #region Attraction Strength
+        #region Attraction
         tof.AttractionStrength = AttractionStrength;
-        tof.DistForMinAtt = DistForMinAtt;
-        tof.AttByDistRange = AttByDistRange;
-        tof.AttMirrorGroups = AttMirrorGroups;
-        #endregion
-        #region Velocity
         tof.VelocityLerp = VelocityLerp;
+        tof.DistForMinAtt = DistForMinAtt;
+        tof.MinAtt = MinAtt;
+        tof.AttToOgHands = AttToOgHands;
+        tof.AttToPlaneMirror = AttToPlaneMirror;
+        tof.AttToPointMirror1 = AttToPointMirror1;
+        tof.AttToPointMirror2 = AttToPointMirror2;
+        tof.AttToReplay = AttToReplay;
+        tof.AttToTorus = AttToTorus;
+        tof.AttToTorusMirror = AttToTorusMirror;
         #endregion
-        #region Attraction Scaling Per Group/Hand
-        tof.ParticlesAttractionGroup1 = ParticlesAttractionGroup1;
-        tof.ParticlesAttractionGroup2 = ParticlesAttractionGroup2;
-        tof.ParticlesAttractionGroup3 = ParticlesAttractionGroup3;
-        tof.ParticlesAttractionGroup4 = ParticlesAttractionGroup4;
-        #region Per Particle Scaling
-        tof.PerParticleScalingMinMax = PerParticleScalingMinMax;
-        tof.PerParticleScalingExponent = PerParticleScalingExponent;
-        tof.PerParticleScalingGroups = PerParticleScalingGroups;
+        #region Particle Group Bias
+        tof.GroupBiasRange = GroupBiasRange;
+        tof.GroupBiasRangeExp = GroupBiasRangeExp;
+        tof.AttGroup1 = AttGroup1;
+        tof.HandBiasG1 = HandBiasG1;
+        tof.AttGroup2 = AttGroup2;
+        tof.HandBiasG2 = HandBiasG2;
+        tof.AttGroup3 = AttGroup3;
+        tof.HandBiasG3 = HandBiasG3;
+        tof.AttGroup4 = AttGroup4;
+        tof.HandBiasG4 = HandBiasG4;
         #endregion
-        #endregion
-        #region Position Offsets
-        tof.PositionOffsetMinMax = PositionOffsetMinMax;
-        #region Joint Mirror
-        tof.AttractToReplay = AttToReplay;
+        #region Positions
+        tof.IndexStepSizeRange = IndexStepSizeRange;
+        tof.PosOffsetRange = PosOffsetRange;
         tof.MirrorDistance = MirrorDistance;
-        #endregion
-        #region Stretch
-        tof.StretchFactorMinMax = StretchFactorMinMax;
+        tof.StretchFactorRange = StretchFactorRange;
         tof.StretchFactorExponent = StretchFactorExponent;
         tof.StretchMax = StretchMax;
         #endregion
-        #endregion
-        #region Index Step Size
-        tof.IndexStepSizeMinMax = IndexStepSizeMinMax;
+        #region Particles
+        tof.ParticlesPerHand = ParticlesPerHand;
+        tof.ParticleSizeRange = ParticleSizeRange;
+        tof.DistanceForMinSize = DistanceForMinSize;
+        tof.SizeLerp = SizeLerp;
+        tof.ParticleMaterial = ParticleMaterial;
         #endregion
         #region Color
         tof.UseDebugColors = UseDebugColors;
@@ -222,8 +233,16 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.ColorLerp = ColorLerp;
         tof.HeartbeatSpeed = HeartbeatSpeed;
         tof.UseHeartbeat = UseHeartbeat;
-        tof.AlphaMinMax = AlphaMinMax;
+        tof.AlphaRange = AlphaRange;
         #endregion
+    }
+    private void UpdateTorus()
+    {
+        STP.RadiusRange = TorusRadiusRange;
+        STP.Wraps = TorusWraps;
+        STP.GradientWidth = TorusGradientWidth;
+        STP.GradientSpeed = TorusGradientSpeed;
+        STP.GradientRange = TorusGradientRange; 
     }
     public void SavePreset(string name)
     {
@@ -234,47 +253,45 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #region State Manage Related
             Name = name,
             #endregion
-            DisplayOculusHands = DisplayOculusHands,
-            #region Particles
-            ParticlesPerHand = ParticlesPerHand,
-            ParticleSizeMinMax = ParticleSizeMinMax,
-            DistanceForMinSize = DistanceForMinSize,
-            SizeLerp = SizeLerp,
-            ParticleMaterial = ParticleMaterial,
-            #endregion
             #region Attraction
             AttractionStrength = AttractionStrength,
-            DistForMinAtt = DistForMinAtt,
-            AttByDistRange = AttByDistRange,
-            #endregion
-            #region Velocity
             VelocityLerp = VelocityLerp,
-            #endregion
-            #region Attraction Scaling Per Group/Hand
-            ParticlesAttractionGroup1 = ParticlesAttractionGroup1,
-            ParticlesAttractionGroup2 = ParticlesAttractionGroup2,
-            ParticlesAttractionGroup3 = ParticlesAttractionGroup3,
-            ParticlesAttractionGroup4 = ParticlesAttractionGroup4,
-            #endregion
-            #region Per Particle Scaling
-            PerParticleScalingMinMax = PerParticleScalingMinMax,
-            PerParticleScalingExponent = PerParticleScalingExponent,
-            PerParticleScalingGroups = PerParticleScalingGroups,
-            #endregion
-            #region Position Offsets
-            PositionOffsetMinMax = PositionOffsetMinMax,
-            #region Joint Mirror
+            DistForMinAtt = DistForMinAtt,
+            MinAtt = MinAtt,
+            AttToOgHands = AttToOgHands,
+            AttToPlaneMirror = AttToPlaneMirror,
+            AttToPointMirror1 = AttToPointMirror1,
+            AttToPointMirror2 = AttToPointMirror2,
             AttToReplay = AttToReplay,
-            MirrorDistance = MirrorDistance,
+            AttToTorus = AttToTorus,
+            AttToTorusMirror = AttToTorusMirror,
             #endregion
-            #region Stretch
-            StretchFactorMinMax = StretchFactorMinMax,
+            #region Particle Group Bias
+            GroupBiasRange = GroupBiasRange,
+            GroupBiasRangeExp = GroupBiasRangeExp,
+            AttGroup1 = AttGroup1,
+            HandBiasG1 = HandBiasG1,
+            AttGroup2 = AttGroup2,
+            HandBiasG2 = HandBiasG2,
+            AttGroup3 = AttGroup3,
+            HandBiasG3 = HandBiasG3,
+            AttGroup4 = AttGroup4,
+            HandBiasG4 = HandBiasG4,
+            #endregion
+            #region Positions
+            IndexStepSizeRange = IndexStepSizeRange,
+            PosOffsetRange = PosOffsetRange,
+            MirrorDistance = MirrorDistance,
+            StretchFactorRange = StretchFactorRange,
             StretchFactorExponent = StretchFactorExponent,
             StretchMax = StretchMax,
             #endregion
-            #endregion
-            #region Index Step Size
-            IndexStepSizeMinMax = IndexStepSizeMinMax,
+            #region Particles
+            ParticlesPerHand = ParticlesPerHand,
+            ParticleSizeRange = ParticleSizeRange,
+            DistanceForMinSize = DistanceForMinSize,
+            SizeLerp = SizeLerp,
+            ParticleMaterial = ParticleMaterial,
             #endregion
             #region Color
             UseDebugColors = UseDebugColors,
@@ -283,9 +300,9 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             ColorLerp = ColorLerp,
             HeartbeatSpeed = HeartbeatSpeed,
             UseHeartbeat = UseHeartbeat,
-            AlphaMinMax = AlphaMinMax,
+            AlphaRange = AlphaRange,
+            DisplayOculusHands = DisplayOculusHands,
             #endregion
-
         };
         for (int i = 0; i < presets.Count; i++)
         {
@@ -304,97 +321,132 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     }
     private void ApplyPreset(FactorState state)
     {
-        #region Particles
-        tof.ParticlesPerHand = state.ParticlesPerHand;
-        ParticlesPerHand = state.ParticlesPerHand;
-        #endregion
-        #region Per Particle Scaling
-        tof.PerParticleScalingMinMax = state.PerParticleScalingMinMax;
-        PerParticleScalingMinMax = state.PerParticleScalingMinMax;
-        tof.PerParticleScalingExponent = state.PerParticleScalingExponent;
-        PerParticleScalingExponent = state.PerParticleScalingExponent;
-        #endregion
-        #region Position Offsets
-        tof.PositionOffsetMinMax = state.PositionOffsetMinMax;
-        PositionOffsetMinMax = state.PositionOffsetMinMax;
-        #endregion
-        #region Index Step Size
-        tof.IndexStepSizeMinMax = state.IndexStepSizeMinMax;
-        IndexStepSizeMinMax = state.IndexStepSizeMinMax;
-        #endregion
-        tof.AttractToReplay = state.AttToReplay;
-        AttToReplay = state.AttToReplay;
-        tof.DisplayOculusHands = state.DisplayOculusHands;
-        DisplayOculusHands = state.DisplayOculusHands;
-        #region Particles
-        tof.ParticleSizeMinMax = state.ParticleSizeMinMax;
-        ParticleSizeMinMax = state.ParticleSizeMinMax;
-        tof.DistanceForMinSize = state.DistanceForMinSize;
-        DistanceForMinSize = state.DistanceForMinSize;
-        tof.SizeLerp = state.SizeLerp;
-        SizeLerp = state.SizeLerp;
-        tof.ParticleMaterial = state.ParticleMaterial;
-        ParticleMaterial = state.ParticleMaterial;
-        #endregion
-        #region Attraction Strength
+        #region Attraction
         tof.AttractionStrength = state.AttractionStrength;
-        AttractionStrength = state.AttractionStrength;
-        tof.DistForMinAtt = state.DistForMinAtt;
-        DistForMinAtt = state.DistForMinAtt;
-        tof.AttByDistRange = state.AttByDistRange;
-        AttByDistRange = state.AttByDistRange;
-        tof.AttMirrorGroups = state.AttMirrorGroups;
-        AttMirrorGroups = state.AttMirrorGroups;
-        #endregion
-        #region Velocity
+        AttractionStrength = state.AttractionStrength; 
+
         tof.VelocityLerp = state.VelocityLerp;
         VelocityLerp = state.VelocityLerp;
-        #endregion
-        #region Attraction Scaling Per Group/Hand
-        tof.ParticlesAttractionGroup1 = state.ParticlesAttractionGroup1;
-        ParticlesAttractionGroup1 = state.ParticlesAttractionGroup1;
-        tof.ParticlesAttractionGroup2 = state.ParticlesAttractionGroup2;
-        ParticlesAttractionGroup2 = state.ParticlesAttractionGroup2;
-        tof.ParticlesAttractionGroup3 = state.ParticlesAttractionGroup3;
-        ParticlesAttractionGroup3 = state.ParticlesAttractionGroup3;
-        tof.ParticlesAttractionGroup4 = state.ParticlesAttractionGroup4;
-        ParticlesAttractionGroup4 = state.ParticlesAttractionGroup4;
-        #region Per Particle Scaling
-        tof.PerParticleScalingGroups = state.PerParticleScalingGroups;
-        PerParticleScalingGroups = state.PerParticleScalingGroups;
-        #endregion
-        #endregion
-        #region Position Offsets
-        #region Joint Mirror
-        tof.AttractToReplay = state.AttToReplay;
+
+        tof.DistForMinAtt = state.DistForMinAtt;
+        DistForMinAtt = state.DistForMinAtt;
+
+        tof.MinAtt = state.MinAtt;
+        MinAtt = state.MinAtt;
+
+        tof.AttToOgHands = state.AttToOgHands;
+        AttToOgHands = state.AttToOgHands;
+
+        tof.AttToPlaneMirror = state.AttToPlaneMirror;
+        AttToPlaneMirror = state.AttToPlaneMirror;
+
+        tof.AttToPointMirror1 = state.AttToPointMirror1;
+        AttToPointMirror1 = state.AttToPointMirror1;
+
+        tof.AttToPointMirror2 = state.AttToPointMirror2;
+        AttToPointMirror2 = AttToPointMirror2;
+
+        tof.AttToReplay = state.AttToReplay;
         AttToReplay = state.AttToReplay;
+
+        tof.AttToTorus = state.AttToTorus;
+        AttToTorus = state.AttToTorus;
+
+        tof.AttToTorusMirror = state.AttToTorusMirror;
+        AttToTorusMirror = state.AttToTorusMirror;
+        #endregion
+        #region Particle Group Bias
+        tof.GroupBiasRange = state.GroupBiasRange;
+        GroupBiasRange = state.GroupBiasRange;
+
+        tof.GroupBiasRangeExp = state.GroupBiasRangeExp;
+        GroupBiasRangeExp = state.GroupBiasRangeExp;
+
+        tof.AttGroup1 = state.AttGroup1;
+        AttGroup1 = state.AttGroup1;
+
+        tof.HandBiasG1 = HandBiasG1;
+        HandBiasG1 = state.HandBiasG1;
+
+        tof.AttGroup2 = state.AttGroup2;
+        AttGroup2 = state.AttGroup2;
+
+        tof.HandBiasG2 = HandBiasG2;
+        HandBiasG2 = state.HandBiasG2;
+
+        tof.AttGroup3 = state.AttGroup3;
+        AttGroup3 = state.AttGroup3;
+
+        tof.HandBiasG3 = HandBiasG3;
+        HandBiasG3 = state.HandBiasG3;
+
+        tof.AttGroup4 = state.AttGroup4;
+        AttGroup4 = state.AttGroup4;
+
+        tof.HandBiasG4 = HandBiasG4;
+        HandBiasG4 = state.HandBiasG4;
+        #endregion
+        #region Positions
+        tof.IndexStepSizeRange = state.IndexStepSizeRange;
+        IndexStepSizeRange = state.IndexStepSizeRange;
+
+        tof.PosOffsetRange = state.PosOffsetRange;
+        PosOffsetRange = state.PosOffsetRange;
+
         tof.MirrorDistance = state.MirrorDistance;
         MirrorDistance = state.MirrorDistance;
-        #endregion
-        #region Stretch
-        tof.StretchFactorMinMax = state.StretchFactorMinMax;
+
+        tof.StretchFactorRange = state.StretchFactorRange;
+        StretchFactorRange = state.StretchFactorRange;
+
         tof.StretchFactorExponent = state.StretchFactorExponent;
-        StretchFactorMinMax = state.StretchFactorMinMax;
         StretchFactorExponent = state.StretchFactorExponent;
+
         tof.StretchMax = state.StretchMax;
         StretchMax = state.StretchMax;
         #endregion
+        #region Particles
+        tof.ParticlesPerHand = state.ParticlesPerHand;
+        ParticlesPerHand = state.ParticlesPerHand;
+
+        tof.ParticleSizeRange = state.ParticleSizeRange;
+        ParticleSizeRange = state.ParticleSizeRange;
+
+        tof.DistanceForMinSize = state.DistanceForMinSize;
+        DistanceForMinSize = state.DistanceForMinSize;
+
+        tof.SizeLerp = state.SizeLerp;
+        SizeLerp = state.SizeLerp;
+
+        tof.ParticleMaterial = state.ParticleMaterial;
+        ParticleMaterial = state.ParticleMaterial;
         #endregion
         #region Color
         tof.UseDebugColors = state.UseDebugColors;
         UseDebugColors = state.UseDebugColors;
+
         tof.BaseColorTimeGradient = state.BaseColorTimeGradient;
         BaseColorTimeGradient = state.BaseColorTimeGradient;
+
         tof.ColorTimeGradientUpdateSpeed = state.ColorTimeGradientUpdateSpeed;
         ColorTimeGradientUpdateSpeed = state.ColorTimeGradientUpdateSpeed;
+
         tof.ColorLerp = state.ColorLerp;
         ColorLerp = state.ColorLerp;
+
         tof.HeartbeatSpeed = state.HeartbeatSpeed;
         HeartbeatSpeed = state.HeartbeatSpeed;
+
         tof.UseHeartbeat = state.UseHeartbeat;
         UseHeartbeat = state.UseHeartbeat;
-        tof.AlphaMinMax = state.AlphaMinMax; AlphaMinMax = state.AlphaMinMax;
+
+        tof.AlphaRange = state.AlphaRange;
+        AlphaRange = state.AlphaRange;
+
+        tof.DisplayOculusHands = state.DisplayOculusHands;
+        DisplayOculusHands = state.DisplayOculusHands;
         #endregion
+
 
         currentPresetName = state.Name;
 
@@ -405,6 +457,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     void Start()
     {
         tof = GetComponent<TheOtherFactor>();
+        STP = GameObject.Find("Torus").GetComponent<SnakingTorusParticles>();
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
         {
@@ -419,6 +472,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     private void Update()
     {
         UpdateTOF();
+        UpdateTorus();
         UpdatePresetNameList();
 
         if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
@@ -523,7 +577,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         // Particles Section
         sb.AppendLine("\nParticles:");
         sb.AppendLine($"Particles Per Hand: {ParticlesPerHand}");
-        sb.AppendLine($"Particle Size Min/Max: ({ParticleSizeMinMax.x}, {ParticleSizeMinMax.y})");
+        sb.AppendLine($"Particle Size Min/Max: ({ParticleSizeRange.x}, {ParticleSizeRange.y})");
         sb.AppendLine($"Distance For Min Size: {DistanceForMinSize}");
         sb.AppendLine($"Size Lerp: {SizeLerp}");
         sb.AppendLine($"Particle Material: {(ParticleMaterial != null ? ParticleMaterial.name : "None")}");
@@ -538,20 +592,19 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         // Attraction Scaling Per Group/Hand Section
         sb.AppendLine("\nAttraction Scaling Per Group/Hand:");
-        sb.AppendLine($"Particles Attraction Group 1: {ParticlesAttractionGroup1}");
-        sb.AppendLine($"Particles Attraction Group 2: {ParticlesAttractionGroup2}");
-        sb.AppendLine($"Particles Attraction Group 3: {ParticlesAttractionGroup3}");
-        sb.AppendLine($"Particles Attraction Group 4: {ParticlesAttractionGroup4}");
+        sb.AppendLine($"Particles Attraction Group 1: {AttGroup1}");
+        sb.AppendLine($"Particles Attraction Group 2: {AttGroup2}");
+        sb.AppendLine($"Particles Attraction Group 3: {AttGroup3}");
+        sb.AppendLine($"Particles Attraction Group 4: {AttGroup4}");
 
         // Per Particle Scaling Section
         sb.AppendLine("\nPer Particle Scaling:");
-        sb.AppendLine($"Per Particle Scaling Min/Max: ({PerParticleScalingMinMax.x}, {PerParticleScalingMinMax.y})");
-        sb.AppendLine($"Per Particle Scaling Exponent: {PerParticleScalingExponent}");
-        sb.AppendLine($"Per Particle Scaling Groups: {PerParticleScalingGroups}");
+        sb.AppendLine($"Per Particle Scaling Min/Max: ({GroupBiasRange.x}, {GroupBiasRange.y})");
+        sb.AppendLine($"Per Particle Scaling Exponent: {GroupBiasRangeExp}");
 
         // Position Offsets Section
         sb.AppendLine("\nPosition Offsets:");
-        sb.AppendLine($"Position Offset Min/Max: ({PositionOffsetMinMax.x}, {PositionOffsetMinMax.y})");
+        sb.AppendLine($"Position Offset Min/Max: ({PosOffsetRange.x}, {PosOffsetRange.y})");
 
         // Joint Mirror Section
         sb.AppendLine("\nJoint Mirror:");
@@ -560,13 +613,13 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         // Stretch Section
         sb.AppendLine("\nStretch:");
-        sb.AppendLine($"Stretch Factor Min/Max: ({StretchFactorMinMax.x}, {StretchFactorMinMax.y})");
+        sb.AppendLine($"Stretch Factor Min/Max: ({StretchFactorRange.x}, {StretchFactorRange.y})");
         sb.AppendLine($"Stretch Factor Exponent: {StretchFactorExponent}");
         sb.AppendLine($"Stretch Max: {StretchMax}");
 
         // Index Step Size Section
         sb.AppendLine("\nIndex Step Size:");
-        sb.AppendLine($"Index Step Size Min/Max: ({IndexStepSizeMinMax.x}, {IndexStepSizeMinMax.y})");
+        sb.AppendLine($"Index Step Size Min/Max: ({IndexStepSizeRange.x}, {IndexStepSizeRange.y})");
 
         // Color Section
         sb.AppendLine("\nColor:");
@@ -575,7 +628,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         sb.AppendLine($"Color Lerp: {ColorLerp}");
         sb.AppendLine($"Heartbeat Speed: {HeartbeatSpeed}");
         sb.AppendLine($"Use Heartbeat: {UseHeartbeat}");
-        sb.AppendLine($"Alpha Min/Max: ({AlphaMinMax.x}, {AlphaMinMax.y})");
+        sb.AppendLine($"Alpha Min/Max: ({AlphaRange.x}, {AlphaRange.y})");
 
         return sb.ToString();
     }
