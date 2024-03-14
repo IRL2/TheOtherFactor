@@ -17,11 +17,15 @@ public class TheOtherFactor : MonoBehaviour
     #region Inspector Variables
     #region Attraction
     [Header("Attraction")]
+    [Tooltip("The general attraction strength used for all sources of attraction. It get scaled by the distance to the attraction point.")]
     public float AttractionStrength = 1f;
     [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
     public float VelocityLerp = .1f;
+    [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
     public float DistForMinAtt = 1f;
+    [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
     public float MinAtt = .33f;
+    [Tooltip("A float value that scales the attraction of all particles to the hands of the user.")]
     public float AttToOgHands = 1f;
     public float AttToPlaneMirror = 0f;
     public float AttToPointMirror1 = 0f;
@@ -32,8 +36,8 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Particle Group Bias
     [Header("Particle Group Bias")]
-    public Vector2 GroupBiasRange = new Vector2(0f, 1f);
-    public float GroupBiasRangeExp = .1f;
+    public Vector2 HandBiasRange = new Vector2(0f, 1f);
+    public float HandBiasRangeExp = .1f;
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
     public Vector4 AttGroup1 = Vector4.one;
     [Range(0, 3)]
@@ -971,7 +975,7 @@ public class TheOtherFactor : MonoBehaviour
         attractJob.AttractionExponentDivisor = 2 * AttractionStrength * AttractionStrength;
         #endregion
         #region Particle Group Bias
-        UpdateParticleGroupBias();
+        UpdateHandBias();
         #endregion
         #region Positions
         #region Mesh
@@ -1088,20 +1092,20 @@ public class TheOtherFactor : MonoBehaviour
         leftHandMesh.gameObject.SetActive(DisplayOculusHands);
         rightHandMesh.gameObject.SetActive(DisplayOculusHands);
     }
-    private void UpdateParticleGroupBias()
+    private void UpdateHandBias()
     {
-        if (LastGroupBiasRange != GroupBiasRange || LastGroupBiasRangeExp != GroupBiasRangeExp)
+        if (LastGroupBiasRange != HandBiasRange || LastGroupBiasRangeExp != HandBiasRangeExp)
         {
             int totalParticles = ParticlesPerHand * 2;
             HandBias = new float[totalParticles];
             for (int i = 0; i < totalParticles; i++)
             {
-                float linearRandom = UnityEngine.Random.Range(GroupBiasRange.x, GroupBiasRange.y);
-                HandBias[i] = Mathf.Pow(linearRandom, GroupBiasRangeExp);
+                float linearRandom = UnityEngine.Random.Range(HandBiasRange.x, HandBiasRange.y);
+                HandBias[i] = Mathf.Pow(linearRandom, HandBiasRangeExp);
             }
         }
-        LastGroupBiasRange = GroupBiasRange;
-        LastGroupBiasRangeExp = GroupBiasRangeExp;
+        LastGroupBiasRange = HandBiasRange;
+        LastGroupBiasRangeExp = HandBiasRangeExp;
         
         Vector4 attractionVector = Vector4.one;
         Vector4 perParticleScalingVector = Vector4.one;

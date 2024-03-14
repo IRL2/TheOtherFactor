@@ -26,8 +26,8 @@ public class FactorState
     public float AttToTorusMirror;
     #endregion
     #region Particle Group Bias
-    public Vector2 GroupBiasRange;
-    public float GroupBiasRangeExp;
+    public Vector2 HandBiasRange;
+    public float HandBiasRangeExp;
     public Vector4 AttGroup1;
     public int HandBiasG1;
     public Vector4 AttGroup2;
@@ -102,38 +102,58 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     [Header("Preset Variables")]
     #region Attraction
     [Header("Attraction")]
+    [Tooltip("The general attraction strength used for all sources of attraction. It get scaled by the distance to the attraction source.")]
     public float AttractionStrength = 1f;
     [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
     public float VelocityLerp = .1f;
+    [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
     public float DistForMinAtt = 1f;
+    [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
     public float MinAtt = .33f;
+    [Tooltip("A float value that scales the attraction of all particles to the hands of the user.")]
     public float AttToOgHands = 1f;
+    [Tooltip("A float value that scales the attraction of all particles to the hands of the user, but the attraction sources are mirrored on a plane compared to the OG hands.")]
     public float AttToPlaneMirror = 0f;
+    [Tooltip("A float value that scales the attraction of all particles to the hands of the user, but the attraction sources are mirrored on a point compared to the OG hands. The mirror point is an object in the scene that can be moved around.")]
     public float AttToPointMirror1 = 0f;
+    [Tooltip("A float value that scales the attraction of all particles to the hands of the user, but the attraction sources are mirrored on a point compared to the OG hands. The mirror point is an object in the scene that can be moved around.")]
     public float AttToPointMirror2 = 0f;
+    [Tooltip("A float value that scales the attraction of all particles to the hands of the replay (could be replaced by another user).")]
     public float AttToReplay = 0f;
+    [Tooltip("A float value that scales the attraction of all particles to the torus.")]
     public float AttToTorus = 0f;
+    [Tooltip("A float value that scales the attraction of all particles to the point mirrored (mirrorpoint1) torus torus.")]
     public float AttToTorusMirror = 0f;
     #endregion
     #region Particle Group Bias
     [Header("Particle Group Bias")]
-    public Vector2 GroupBiasRange = new Vector2(0f, 1f);
-    public float GroupBiasRangeExp = .1f;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
+    [Tooltip("Every group of particles has a preferred hand and the attraction to all other hands gets scaled down. It does get scaled down within the HandBiasRange, but not all to the same degree, rather there is a distribution of these scaling values that get randomly generated and then multiplied with themselves HandBiasRangeExp times.")]
+    public Vector2 HandBiasRange = new Vector2(0f, 1f);
+    [Tooltip("Every group of particles has a preferred hand and the attraction to all other hands gets scaled down. It does get scaled down within the HandBiasRange, but not all to the same degree, rather there is a distribution of these scaling values that get randomly generated and then multiplied with themselves HandBiasRangeExp times.")]
+    public float HandBiasRangeExp = .1f;
+    
+    [Tooltip("x,y,z,w value determine the attraction for each particle in that group towards the OG lefthand, OG right hand, Replay left hand and Replay right hand respectively. Green when using debug color in attraciton job.")]  
     public Vector4 AttGroup1 = Vector4.one;
     [Range(0, 3)]
+    [Tooltip("This value indicates which of the 4 hands should be the preference of this particle group. This hands attraction will not be affected by the values in the distribution based on HandBiasRange, so it will always be scaled with 1 whereas all other hands get scaled with a distribution of values HandBiasRange self multiplied HandBiasRangeExp times.")]
     public int HandBiasG1 = 0;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
+    
+    [Tooltip("x,y,z,w value determine the attraction for each particle in that group towards the OG lefthand, OG right hand, Replay left hand and Replay right hand respectively. Red when using debug color in attraciton job.")]
     public Vector4 AttGroup2 = Vector4.one;
     [Range(0, 3)]
+    [Tooltip("This value indicates which of the 4 hands should be the preference of this particle group. This hands attraction will not be affected by the values in the distribution based on HandBiasRange, so it will always be scaled with 1 whereas all other hands get scaled with a distribution of values HandBiasRange self multiplied HandBiasRangeExp times.")]
     public int HandBiasG2 = 0;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
+   
+    [Tooltip("x,y,z,w value determine the attraction for each particle in that group towards the OG lefthand, OG right hand, Replay left hand and Replay right hand respectively. Blue when using debug color in attraciton job.")]
     public Vector4 AttGroup3 = Vector4.one;
     [Range(0, 3)]
+    [Tooltip("This value indicates which of the 4 hands should be the preference of this particle group. This hands attraction will not be affected by the values in the distribution based on HandBiasRange, so it will always be scaled with 1 whereas all other hands get scaled with a distribution of values HandBiasRange self multiplied HandBiasRangeExp times.")]
     public int HandBiasG3 = 1;
-    [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Red when using debug color in attraciton job.")]
+    
+    [Tooltip("x,y,z,w value determine the attraction for each particle in that group towards the OG lefthand, OG right hand, Replay left hand and Replay right hand respectively. Yellow when using debug color in attraciton job.")]
     public Vector4 AttGroup4 = Vector4.one;
     [Range(0, 3)]
+    [Tooltip("This value indicates which of the 4 hands should be the preference of this particle group. This hands attraction will not be affected by the values in the distribution based on HandBiasRange, so it will always be scaled with 1 whereas all other hands get scaled with a distribution of values HandBiasRange self multiplied HandBiasRangeExp times.")]
     public int HandBiasG4 = 1;
     #endregion
     #region Positions
@@ -200,8 +220,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.AttToTorusMirror = AttToTorusMirror;
         #endregion
         #region Particle Group Bias
-        tof.GroupBiasRange = GroupBiasRange;
-        tof.GroupBiasRangeExp = GroupBiasRangeExp;
+        tof.HandBiasRange = HandBiasRange;
+        tof.HandBiasRangeExp = HandBiasRangeExp;
         tof.AttGroup1 = AttGroup1;
         tof.HandBiasG1 = HandBiasG1;
         tof.AttGroup2 = AttGroup2;
@@ -267,8 +287,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             AttToTorusMirror = AttToTorusMirror,
             #endregion
             #region Particle Group Bias
-            GroupBiasRange = GroupBiasRange,
-            GroupBiasRangeExp = GroupBiasRangeExp,
+            HandBiasRange = HandBiasRange,
+            HandBiasRangeExp = HandBiasRangeExp,
             AttGroup1 = AttGroup1,
             HandBiasG1 = HandBiasG1,
             AttGroup2 = AttGroup2,
@@ -356,11 +376,11 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         AttToTorusMirror = state.AttToTorusMirror;
         #endregion
         #region Particle Group Bias
-        tof.GroupBiasRange = state.GroupBiasRange;
-        GroupBiasRange = state.GroupBiasRange;
+        tof.HandBiasRange = state.HandBiasRange;
+        HandBiasRange = state.HandBiasRange;
 
-        tof.GroupBiasRangeExp = state.GroupBiasRangeExp;
-        GroupBiasRangeExp = state.GroupBiasRangeExp;
+        tof.HandBiasRangeExp = state.HandBiasRangeExp;
+        HandBiasRangeExp = state.HandBiasRangeExp;
 
         tof.AttGroup1 = state.AttGroup1;
         AttGroup1 = state.AttGroup1;
@@ -599,8 +619,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         // Per Particle Scaling Section
         sb.AppendLine("\nPer Particle Scaling:");
-        sb.AppendLine($"Per Particle Scaling Min/Max: ({GroupBiasRange.x}, {GroupBiasRange.y})");
-        sb.AppendLine($"Per Particle Scaling Exponent: {GroupBiasRangeExp}");
+        sb.AppendLine($"Per Particle Scaling Min/Max: ({HandBiasRange.x}, {HandBiasRange.y})");
+        sb.AppendLine($"Per Particle Scaling Exponent: {HandBiasRangeExp}");
 
         // Position Offsets Section
         sb.AppendLine("\nPosition Offsets:");
