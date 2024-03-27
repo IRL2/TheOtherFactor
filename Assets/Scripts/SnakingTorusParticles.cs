@@ -12,8 +12,8 @@ public class SnakingTorusParticles : MonoBehaviour
     [HideInInspector]
     public bool RunSystem = false;
     public int numParticles = 100;
-    public Vector2 RadiusRange = new Vector2(.0000001f, 1f); //(.2,.22222);
-    public float Wraps = 1.0f;//12
+    public Vector2 RadiusRange = new Vector2(.0000001f, 1f); //(.2,.22222); 
+    public float MajorWraps = 1.0f;//12
     public Vector2 SizeRange = new Vector2(0.01f, 0.02f); 
     public float alpha = 1.0f;
     public float GradientWidth = 1.0f;//10
@@ -26,7 +26,7 @@ public class SnakingTorusParticles : MonoBehaviour
 
     void Start()
     {
-        particleSystem = GetComponent<ParticleSystem>();
+        //particleSystem = GetComponent<ParticleSystem>();
         // Emit particles based on the Particle System's parameters
         particleSystem.Emit(numParticles);
         //RadiusRange.y = RadiusRange.x * 2.3333f;
@@ -34,7 +34,7 @@ public class SnakingTorusParticles : MonoBehaviour
         {
             RadiusRange = RadiusRange,
             Position = transform.position,
-            Wraps = Wraps,
+            MajorWraps = MajorWraps,
             SizeRange = SizeRange,
             Alpha = alpha,
             NumParticles = numParticles,
@@ -53,7 +53,7 @@ public class SnakingTorusParticles : MonoBehaviour
         {
             stp_Job.RadiusRange = RadiusRange;
             stp_Job.Position = transform.position;
-            stp_Job.Wraps = Wraps;
+            stp_Job.MajorWraps = MajorWraps;
             stp_Job.SizeRange = SizeRange;
             stp_Job.Alpha = alpha;
             stp_Job.NumParticles = numParticles;
@@ -74,15 +74,15 @@ public class SnakingTorusParticles : MonoBehaviour
     {
         [ReadOnly] public Vector2 RadiusRange;
         [ReadOnly] public Vector3 Position;
-        [ReadOnly] public float Wraps; //768
+        [ReadOnly] public float MajorWraps;
         [ReadOnly] public int NumParticles;
-        [ReadOnly] public Vector2 SizeRange; //new Vector2(.011f, .0444444f); //new Vector2(.2f, .222222f); 0.055; 0.2222222
+        [ReadOnly] public Vector2 SizeRange;
         [ReadOnly] public Color BaseColor;
         [ReadOnly] public float ColorLerp;
         [ReadOnly] public float Alpha;
         [ReadOnly] public float Time;
-        [ReadOnly] public float GradientWidth;//333
-        [ReadOnly] public float GradientSpeed;//10
+        [ReadOnly] public float GradientWidth;
+        [ReadOnly] public float GradientSpeed;
         [ReadOnly] public Vector2 GradientRange;
 
         public void Execute(ParticleSystemJobData particles, int startIndex, int count)
@@ -92,7 +92,7 @@ public class SnakingTorusParticles : MonoBehaviour
             var sizes = particles.sizes.x;
             int endIndex = startIndex + count;
 
-            float totalAngle = 2 * Mathf.PI * Wraps;
+            float totalAngle = 2 * Mathf.PI * MajorWraps;
 
             for (int i = startIndex; i < endIndex; i++)
             {
@@ -123,57 +123,3 @@ public class SnakingTorusParticles : MonoBehaviour
     }
 
 }
-/*
- *     struct SnakingTorusJob : IJobParticleSystemParallelForBatch
-    {
-        [ReadOnly] public Vector2 RadiusRange;
-        [ReadOnly] public Vector3 Position;
-        [ReadOnly] public float Wraps;
-        [ReadOnly] public int NumParticles;
-        [ReadOnly] public Vector2 SizeRange;
-        [ReadOnly] public Color BaseColor;
-        [ReadOnly] public float ColorLerp;
-        [ReadOnly] public float Alpha;
-        [ReadOnly] public float Time;
-        public float GradientWidth;
-        public float GradientSpeed;
-        public float GradientMin; // Minimum value for the gradient
-        public float GradientMax; // Maximum value for the gradient
-
-        public void Execute(ParticleSystemJobData particles, int startIndex, int count)
-        {
-            var positions = particles.positions;
-            var colors = particles.startColors;
-            var sizes = particles.sizes.x;
-            int endIndex = startIndex + count;
-
-            float totalAngle = 2 * Mathf.PI * Wraps;
-
-            for (int i = startIndex; i < endIndex; i++)
-            {
-                float theta = i * totalAngle / NumParticles;
-                float minorWraps = RadiusRange.y / RadiusRange.x;
-                float phi = i * totalAngle * minorWraps / NumParticles;
-
-                float x = (RadiusRange.y + RadiusRange.x * Mathf.Cos(phi)) * Mathf.Cos(theta);
-                float y = (RadiusRange.y + RadiusRange.x * Mathf.Cos(phi)) * Mathf.Sin(theta);
-                float z = RadiusRange.x * Mathf.Sin(phi);
-
-                Vector3 position = new Vector3(x, y, z);
-                positions[i] = position;
-
-                // Apply a sinusoidal function with configurable width, speed, min, and max
-                float gradientValue = Mathf.Sin((i / GradientWidth) + (Time * GradientSpeed));
-                gradientValue = (gradientValue * 0.5f + 0.5f) * (GradientMax - GradientMin) + GradientMin; // Map sine wave to GradientMin to GradientMax
-
-                // Set the color and other properties as needed
-                Color gradientColor = new Color(gradientValue, gradientValue, gradientValue, gradientValue * Alpha);
-                colors[i] = Color.Lerp(colors[i], gradientColor, ColorLerp);
-
-                // Compute particle size based on the gradient value
-                float size = Mathf.Lerp(SizeRange.x, SizeRange.y, gradientValue); // Linearly interpolate size based on gradient value
-                sizes[i] = size; // Assuming uniform size for simplicity
-            }
-        }
-    }
-*/

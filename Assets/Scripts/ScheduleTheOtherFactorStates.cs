@@ -8,7 +8,6 @@ using UnityEngine;
 public class FactorState
 {
     #region State Management Related
-    public bool RestartEngine;
     public string Name;
     #endregion
     #region Inspector Variables
@@ -19,15 +18,14 @@ public class FactorState
     public float MinAtt;
     public float AttToOgHands;
     public float AttToPlaneMirror;
-    public float AttToPointMirror1;
-    public float AttToPointMirror2;
+    public float AttToPointMirror;
     public float AttToReplay;
     public float AttToTorus;
     public float AttToTorusMirror;
     #endregion
     #region Particle Group Bias
     public Vector2 HandBiasRange;
-    public float HandBiasRangeExp;
+    public int HandBiasRangeExp;
     public Vector4 AttGroup1;
     public int HandBiasG1;
     public Vector4 AttGroup2;
@@ -40,15 +38,18 @@ public class FactorState
     #region Positions
     public Vector2 IndexStepSizeRange;
     public Vector2 PosOffsetRange;
+    [HideInInspector]
     public Vector2 StretchFactorRange = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
+    [HideInInspector]
+    public int StretchFactorExponent = 2;
+    [HideInInspector]
     public float StretchMax = 1f;
     public float MirrorDistance;
     #endregion
     #region Torus
     [Header("Torus")]
     public Vector2 TorusRadiusRange;
-    public float TorusWraps;
+    public float TorusMajorWraps;
     public float TorusGradientWidth;
     public float TorusGradientSpeed;
     public Vector2 TorusGradientRange;
@@ -65,9 +66,7 @@ public class FactorState
     public Gradient BaseColorTimeGradient;
     public float ColorTimeGradientUpdateSpeed;
     public float ColorLerp;
-    public float HeartbeatSpeed;
-    public bool UseHeartbeat;
-    public Vector2 AlphaRange;
+    public float Alpha;
     public bool DisplayOculusHands;
     #endregion
     #endregion
@@ -80,11 +79,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #region Schedule
     private TheOtherFactor tof;
     public List<FactorState> presets = new List<FactorState>();
-    public List<string> presetNamesForReference = new List<string>();
-    [SerializeField]
     private int currentPresetIndex = 0;
-    [SerializeField]
-    private string currentPresetName;
     #endregion
     #region Utility
     [Header("Utility")]
@@ -103,26 +98,34 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #region Attraction
     [Header("Attraction")]
     [Tooltip("The general attraction strength used for all sources of attraction. It get scaled by the distance to the attraction source.")]
+    [Range(0f, 1f)]
     public float AttractionStrength = 1f;
     [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
+    [Range(0.05f, 1f)]
     public float VelocityLerp = .1f;
     [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
+    [Range (0f, 1f)]
     public float DistForMinAtt = 1f;
     [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
+    [Range(0,1f)]
     public float MinAtt = .33f;
     [Tooltip("A float value that scales the attraction of all particles to the hands of the user.")]
+    [Range(0, 1f)]
     public float AttToOgHands = 1f;
     [Tooltip("A float value that scales the attraction of all particles to the hands of the user, but the attraction sources are mirrored on a plane compared to the OG hands.")]
+    [Range(0, 1f)]
     public float AttToPlaneMirror = 0f;
     [Tooltip("A float value that scales the attraction of all particles to the hands of the user, but the attraction sources are mirrored on a point compared to the OG hands. The mirror point is an object in the scene that can be moved around.")]
-    public float AttToPointMirror1 = 0f;
-    [Tooltip("A float value that scales the attraction of all particles to the hands of the user, but the attraction sources are mirrored on a point compared to the OG hands. The mirror point is an object in the scene that can be moved around.")]
-    public float AttToPointMirror2 = 0f;
+    [Range(0, 1f)]
+    public float AttToPointMirror = 0f;
     [Tooltip("A float value that scales the attraction of all particles to the hands of the replay (could be replaced by another user).")]
+    [Range(0, 1f)]
     public float AttToReplay = 0f;
     [Tooltip("A float value that scales the attraction of all particles to the torus.")]
+    [Range(0, 1f)]
     public float AttToTorus = 0f;
     [Tooltip("A float value that scales the attraction of all particles to the point mirrored (mirrorpoint1) torus torus.")]
+    [Range(0, 1f)]
     public float AttToTorusMirror = 0f;
     #endregion
     #region Particle Group Bias
@@ -130,7 +133,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     [Tooltip("Every group of particles has a preferred hand and the attraction to all other hands gets scaled down. It does get scaled down within the HandBiasRange, but not all to the same degree, rather there is a distribution of these scaling values that get randomly generated and then multiplied with themselves HandBiasRangeExp times.")]
     public Vector2 HandBiasRange = new Vector2(0f, 1f);
     [Tooltip("Every group of particles has a preferred hand and the attraction to all other hands gets scaled down. It does get scaled down within the HandBiasRange, but not all to the same degree, rather there is a distribution of these scaling values that get randomly generated and then multiplied with themselves HandBiasRangeExp times.")]
-    public float HandBiasRangeExp = .1f;
+    [Range(1,4)]
+    public int HandBiasRangeExp = 2;
     
     [Tooltip("x,y,z,w value determine the attraction for each particle in that group towards the OG lefthand, OG right hand, Replay left hand and Replay right hand respectively. Green when using debug color in attraciton job.")]  
     public Vector4 AttGroup1 = Vector4.one;
@@ -160,45 +164,64 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     [Header("Positions")]
     [Tooltip("The min and max size step a particle can take in the array that holds all mesh positions. 0-0 = particles stick to one position. 1-1 = particles always progress 1 position each update. 0-2 = particles might stay in place, move ahead one position or 2 positions in one update.")]
     public Vector2 IndexStepSizeRange = new Vector2(0, 2);
-    [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
+    [Tooltip("Determines the min and max interpolation between the positions on the mesh and the closest joint. 0 = full mesh, 1 = full joint")]
     public Vector2 PosOffsetRange = new Vector2(0f, .7f);
-    public Vector2 StretchFactorRange = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
+    [HideInInspector]
+    [Tooltip("The min and max amount a particles stretch value can increase in one update step. These values fill an array and each particle keeps its value, so ome will stretch faster then others.")]
+    public Vector2 StretchFactorRange = new Vector2(0f, 0f);
+    [HideInInspector]
+    [Range(0, 4)]
+    [Tooltip("Determines how often the StretchFactorRange values get multiplied with themselves to create a gradient distribution for the stretch.")]
+    public int StretchFactorExponent = 2;
+    // the stop condition of stretch needs to be revisited
+    [HideInInspector]
     public float StretchMax = 1f;
-    public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
+    [Range(0f, 1f)]
+    [Tooltip("The distance from the headset in the forward direction at activation which the mirror positions will get set.")]
+    public float MirrorDistance = .5f; 
     #endregion
     #region Torus
     [Header("Torus")]
+    [Tooltip("The minor and major radius of the torus. The major radius is the distance from the center of the torus to the center of the tube, while the minor radius is the radius of the tube itself.")]
     public Vector2 TorusRadiusRange = new Vector2(.0000001f, 1f);
-    public float TorusWraps = 1.0f;
+    [Tooltip("Determines how often the string of particles is supposed to wrap around the major radius of torus.")]
+    public float TorusMajorWraps = 1.0f;
+    [Tooltip("How many neighbouring particles together cycle from the TorusGradientRange.x value to the TorusGradientRange.y value and back. This gradient can be used to change attraction.")]
     public float TorusGradientWidth = 1.0f;
+    [Tooltip("The speed at which the gradient values shift, simulating a situation that looks as if the gradients where wondering over the torus which can be used to guide attraction.")]
     public float TorusGradientSpeed = 1.0f;
     public Vector2 TorusGradientRange = new Vector2(.01f, .21f);
-    private SnakingTorusParticles STP = new SnakingTorusParticles();
+    [Tooltip("The min and max values for the torus particles color value, which can be used to influence attraction of TheOtheFactor particles.")]
+    private SnakingTorusParticles STP;
     #endregion
     #region Particles
     [Header("Particles")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public int ParticlesPerHand = 35000;
-    [Tooltip("The min and max values for aprticle size, max reached at 0 distance from joint, min reached at DistanceForMinSize.")]
+    [Tooltip("The min and max values for particle size, max reached at 0 distance from joint, min reached at DistanceForMinSize.")]
     public Vector2 ParticleSizeRange = new Vector2(.003f, .008f);
-    [Tooltip("The distance between particle and joint at which the particle size reaches ParticleSizeRange.x")]
+    [Tooltip("The distance between particle and its current mesh position at which the particle size reaches ParticleSizeRange.x")]
+    [Range(0,1f)]
     public float DistanceForMinSize = .008f;
     [Tooltip("The linear interpolation factor for size change in one update.")]
+    [Range(0.05f,1f)]
     public float SizeLerp = .05f;
-    [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
     public Material ParticleMaterial;
     #endregion
     #region Color
     [Header("Color")]
+    [Tooltip("If true, the 4 particle groups will get individual colors for debugging purposes.")]
     public bool UseDebugColors = false;
+    [Tooltip("The color for each particle is computed by linearly interpolating from the current base color towards the coloring based on velocity and the alpha component of the current base color determines the linear interpolation amount.")]
     public Gradient BaseColorTimeGradient;
+    [Tooltip("This determines how quickly the base color changes based on the color gradient.")]
     public float ColorTimeGradientUpdateSpeed = 3.14f;
     [Tooltip("The linear interpolation factor for color change in one opdate step.")]
+    [Range(0.05f,1f)]
     public float ColorLerp = .05f;
-    public float HeartbeatSpeed = 1f;
-    public bool UseHeartbeat = true;
-    public Vector2 AlphaRange = new Vector2(.2f, .7f);
+    [Tooltip("The alpha component of TheOtherFactor particles color.")]
+    public float Alpha = .7f;
+    [Tooltip("Whether or not to show the default oculus hands. Mostly for debugging.")]
     public bool DisplayOculusHands = false;
     #endregion
     #endregion
@@ -213,8 +236,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.MinAtt = MinAtt;
         tof.AttToOgHands = AttToOgHands;
         tof.AttToPlaneMirror = AttToPlaneMirror;
-        tof.AttToPointMirror1 = AttToPointMirror1;
-        tof.AttToPointMirror2 = AttToPointMirror2;
+        tof.AttToPointMirror = AttToPointMirror;
         tof.AttToReplay = AttToReplay;
         tof.AttToTorus = AttToTorus;
         tof.AttToTorusMirror = AttToTorusMirror;
@@ -251,15 +273,13 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.BaseColorTimeGradient = BaseColorTimeGradient;
         tof.ColorTimeGradientUpdateSpeed = ColorTimeGradientUpdateSpeed;
         tof.ColorLerp = ColorLerp;
-        tof.HeartbeatSpeed = HeartbeatSpeed;
-        tof.UseHeartbeat = UseHeartbeat;
-        tof.AlphaRange = AlphaRange;
+        tof.Alpha = Alpha;
         #endregion
     }
     private void UpdateTorus()
     {
         STP.RadiusRange = TorusRadiusRange;
-        STP.Wraps = TorusWraps;
+        STP.MajorWraps = TorusMajorWraps;
         STP.GradientWidth = TorusGradientWidth;
         STP.GradientSpeed = TorusGradientSpeed;
         STP.GradientRange = TorusGradientRange; 
@@ -280,8 +300,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             MinAtt = MinAtt,
             AttToOgHands = AttToOgHands,
             AttToPlaneMirror = AttToPlaneMirror,
-            AttToPointMirror1 = AttToPointMirror1,
-            AttToPointMirror2 = AttToPointMirror2,
+            AttToPointMirror = AttToPointMirror,
             AttToReplay = AttToReplay,
             AttToTorus = AttToTorus,
             AttToTorusMirror = AttToTorusMirror,
@@ -306,6 +325,13 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             StretchFactorExponent = StretchFactorExponent,
             StretchMax = StretchMax,
             #endregion
+            #region Torus
+            TorusRadiusRange = TorusRadiusRange,
+            TorusMajorWraps = TorusMajorWraps,
+            TorusGradientWidth = TorusGradientWidth,
+            TorusGradientSpeed = TorusGradientSpeed,
+            TorusGradientRange = TorusGradientRange,
+            #endregion
             #region Particles
             ParticlesPerHand = ParticlesPerHand,
             ParticleSizeRange = ParticleSizeRange,
@@ -318,9 +344,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             BaseColorTimeGradient = BaseColorTimeGradient,
             ColorTimeGradientUpdateSpeed = ColorTimeGradientUpdateSpeed,
             ColorLerp = ColorLerp,
-            HeartbeatSpeed = HeartbeatSpeed,
-            UseHeartbeat = UseHeartbeat,
-            AlphaRange = AlphaRange,
+            Alpha = Alpha,
             DisplayOculusHands = DisplayOculusHands,
             #endregion
         };
@@ -336,7 +360,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         if (!foundExistingPresetWithSameName)
         {
             presets.Add(newState);
-            presetNamesForReference.Add(newState.Name);
         }
     }
     private void ApplyPreset(FactorState state)
@@ -360,11 +383,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.AttToPlaneMirror = state.AttToPlaneMirror;
         AttToPlaneMirror = state.AttToPlaneMirror;
 
-        tof.AttToPointMirror1 = state.AttToPointMirror1;
-        AttToPointMirror1 = state.AttToPointMirror1;
-
-        tof.AttToPointMirror2 = state.AttToPointMirror2;
-        AttToPointMirror2 = AttToPointMirror2;
+        tof.AttToPointMirror = state.AttToPointMirror;
+        AttToPointMirror = state.AttToPointMirror;
 
         tof.AttToReplay = state.AttToReplay;
         AttToReplay = state.AttToReplay;
@@ -425,6 +445,22 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.StretchMax = state.StretchMax;
         StretchMax = state.StretchMax;
         #endregion
+        #region Torus
+        STP.RadiusRange = state.TorusRadiusRange;
+        TorusRadiusRange = state.TorusRadiusRange;
+
+        STP.MajorWraps = state.TorusMajorWraps;
+        TorusMajorWraps = state.TorusMajorWraps;
+
+        STP.GradientWidth = state.TorusGradientWidth;
+        TorusGradientWidth = state.TorusGradientWidth;
+
+        STP.GradientSpeed = state.TorusGradientSpeed;
+        TorusGradientSpeed = state.TorusGradientSpeed;
+
+        STP.GradientRange = state.TorusGradientRange;
+        TorusGradientRange = state.TorusGradientRange;
+        #endregion
         #region Particles
         tof.ParticlesPerHand = state.ParticlesPerHand;
         ParticlesPerHand = state.ParticlesPerHand;
@@ -454,21 +490,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.ColorLerp = state.ColorLerp;
         ColorLerp = state.ColorLerp;
 
-        tof.HeartbeatSpeed = state.HeartbeatSpeed;
-        HeartbeatSpeed = state.HeartbeatSpeed;
-
-        tof.UseHeartbeat = state.UseHeartbeat;
-        UseHeartbeat = state.UseHeartbeat;
-
-        tof.AlphaRange = state.AlphaRange;
-        AlphaRange = state.AlphaRange;
+        tof.Alpha = state.Alpha;
+        Alpha = state.Alpha;
 
         tof.DisplayOculusHands = state.DisplayOculusHands;
         DisplayOculusHands = state.DisplayOculusHands;
         #endregion
-
-
-        currentPresetName = state.Name;
 
         canvasMover.SetCanvasPosition();
         if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
@@ -487,13 +514,11 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         canvasMover = canvas.GetComponent<CanvasMover>();
         presetDisplayText = canvas.GetComponentInChildren<TextMeshProUGUI>();
         canvasMover.SetCanvasPosition();
-        presetDisplayText.text = currentPresetName;
     }
     private void Update()
     {
         UpdateTOF();
         UpdateTorus();
-        UpdatePresetNameList();
 
         if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
         else presetDisplayText.text = "";
@@ -539,24 +564,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             Debug.LogWarning("Preset not found.");
         }
     }
-    public void UpdatePresetNameList()
-    {
-        if (presetNamesForReference.Count != presets.Count)
-        {
-            presetNamesForReference.Clear();
-            foreach (var preset in presets)
-            {
-                presetNamesForReference.Add(preset.Name);
-            }
-        }
-        else
-        {
-            for (int i = 0; i < presets.Count; i++)
-            {
-                presetNamesForReference[i] = presets[i].Name;
-            }
-        }
-    }
     public void NextPreset()
     {
         currentPresetIndex = (currentPresetIndex + 1) % presets.Count;
@@ -587,12 +594,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.StopTheOtherFactor();
         tofIsRunningJobs = false;
     }
+    //needs revisiting
     string FormatVariablesForDisplay()
     {
         System.Text.StringBuilder sb = new System.Text.StringBuilder();
 
         sb.AppendLine($"Current Preset Index: {currentPresetIndex}");
-        sb.AppendLine($"Current Preset Name: {currentPresetName}");
 
         // Particles Section
         sb.AppendLine("\nParticles:");
@@ -646,9 +653,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         sb.AppendLine($"Use Debug Colors: {UseDebugColors}");
         sb.AppendLine($"Color Time Gradient Update Speed: {ColorTimeGradientUpdateSpeed}");
         sb.AppendLine($"Color Lerp: {ColorLerp}");
-        sb.AppendLine($"Heartbeat Speed: {HeartbeatSpeed}");
-        sb.AppendLine($"Use Heartbeat: {UseHeartbeat}");
-        sb.AppendLine($"Alpha Min/Max: ({AlphaRange.x}, {AlphaRange.y})");
+        sb.AppendLine($"Alpha Min/Max: ({Alpha})");
 
         return sb.ToString();
     }

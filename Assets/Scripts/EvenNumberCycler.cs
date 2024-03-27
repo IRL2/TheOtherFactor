@@ -60,7 +60,7 @@ public class EvenNumberCycler : MonoBehaviour
         if (Schedule != null)
         {
             // Replace 'yourIntegerVariable' with the actual integer variable name in TheOtherFactor
-            Schedule.TorusWraps = currentValue;
+            Schedule.TorusMajorWraps = currentValue;
         }
 
         Debug.Log("Current Even Value: " + currentValue);

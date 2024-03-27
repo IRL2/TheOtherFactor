@@ -28,8 +28,7 @@ public class TheOtherFactor : MonoBehaviour
     [Tooltip("A float value that scales the attraction of all particles to the hands of the user.")]
     public float AttToOgHands = 1f;
     public float AttToPlaneMirror = 0f;
-    public float AttToPointMirror1 = 0f;
-    public float AttToPointMirror2 = 0f;
+    public float AttToPointMirror = 0f;
     public float AttToReplay = 0f;
     public float AttToTorus = 1f;
     public float AttToTorusMirror = 1f;
@@ -37,7 +36,7 @@ public class TheOtherFactor : MonoBehaviour
     #region Particle Group Bias
     [Header("Particle Group Bias")]
     public Vector2 HandBiasRange = new Vector2(0f, 1f);
-    public float HandBiasRangeExp = .1f;
+    public int HandBiasRangeExp = 2;
     [Tooltip("x and y value determine the attraction for each particle in that group towards the left and right hand respectively. Green when using debug color in attraciton job.")]
     public Vector4 AttGroup1 = Vector4.one;
     [Range(0, 3)]
@@ -59,8 +58,11 @@ public class TheOtherFactor : MonoBehaviour
     public Vector2 IndexStepSizeRange = Vector2.zero;
     [Tooltip("Determines the min and max interpolation between the relative positions on the mesh and the joint. 0 = full mesh, 1 = full joint")]
     public Vector2 PosOffsetRange = new Vector2(0f, .7f);
+    [HideInInspector]
     public Vector2 StretchFactorRange = new Vector2(0f, 1f);
-    public float StretchFactorExponent = 1f;
+    [HideInInspector]
+    public int StretchFactorExponent = 2;
+    [HideInInspector]
     public float StretchMax = 1f;
     public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
     #endregion
@@ -85,9 +87,7 @@ public class TheOtherFactor : MonoBehaviour
     public float ColorTimeGradientUpdateSpeed = 3.14f;
     [Tooltip("The linear interpolation factor for color change in one opdate step.")]
     public float ColorLerp = .05f;
-    public float HeartbeatSpeed = 1f;
-    public bool UseHeartbeat = true;
-    public Vector2 AlphaRange = new Vector2(.2f, .7f);
+    public float Alpha = .7f;
     public bool DisplayOculusHands = false;
     #endregion
     #endregion
@@ -113,8 +113,7 @@ public class TheOtherFactor : MonoBehaviour
     private Vector3 stretchPlaneNormal;
     private Vector3 mirrorPlanePosition;
     private Vector3 mirrorPlaneNormalRotated;
-    private Transform MirrorPoint1;
-    private Transform MirrorPoint2;
+    private Transform MirrorPoint;
     private SnakingTorusParticles STP = new SnakingTorusParticles();
     private ParticleSystem parSysSTP;
     ParticleSystem.Particle[] STPparticles;
@@ -191,8 +190,7 @@ public class TheOtherFactor : MonoBehaviour
         parSysSTP = STP.gameObject.GetComponent<ParticleSystem>();
         #endregion
         #region Mirrors
-        MirrorPoint1 = GameObject.Find("Mirror Point 1").transform;
-        MirrorPoint2 = GameObject.Find("Mirror Point 2").transform;
+        MirrorPoint = GameObject.Find("Mirror Point").transform;
         #endregion
         #region Pseudo Mesh Creator
         PseudoMeshCreator = GameObject.Find("PseudoMeshCreator").GetComponent<PseudoMeshCreator>();
@@ -318,12 +316,9 @@ public class TheOtherFactor : MonoBehaviour
         mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * MirrorDistance;
         mirrorPlaneNormalRotated = rotatedForward;
         Vector3  MirrorPointPosition = mirrorPlanePosition;
-        MirrorPointPosition.y = 1.25f;
-        MirrorPoint1.position = MirrorPointPosition;
-        MirrorPointPosition.y += .25f;
-        MirrorPoint2.position = MirrorPointPosition;
+        MirrorPointPosition.y = 1.5f;
+        MirrorPoint.position = MirrorPointPosition;
 
-        MirrorPointPosition.y = 1.25f;
         STP.gameObject.SetActive(true);
         STP.RunSystem = true;
         STP.transform.position = MirrorPointPosition;
@@ -354,23 +349,18 @@ public class TheOtherFactor : MonoBehaviour
             // Emit particles around the left middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                //emitParams.position = leftMiddle1Joint + UnityEngine.Random.insideUnitSphere * emissionRadius;
-                emitParams.position = MirrorPoint1.position;
+                emitParams.position = leftMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSys.Emit(emitParams, 1);
             }
 
             // Emit particles around the right middle1 joint
             for (int i = 0; i < totalParticles / 2; i++)
             {
-                //emitParams.position = rightMiddle1Joint + UnityEngine.Random.insideUnitSphere * emissionRadius;
-                emitParams.position = MirrorPoint2.position;
+                emitParams.position = rightMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSys.Emit(emitParams, 1);
             }
         }
-        Vector3 merkabaPosition = MirrorPoint1.position;
-        merkabaPosition.y += (MirrorPoint2.position.y - MirrorPoint1.position.y) / 2;
-        //SetMerkaba(merkabaPosition);
-        SetMerkaba(MirrorPoint1.position);
+        SetMerkaba(MirrorPoint.position);
     }
     private void SetMerkaba(Vector3 centerPoint)
     {
@@ -519,8 +509,7 @@ public class TheOtherFactor : MonoBehaviour
             MinAtt = MinAtt,
             AttToOgHands = AttToOgHands,
             AttToPlaneMirror = AttToPlaneMirror,
-            AttToPointMirror1 = AttToPointMirror1,
-            AttToPointMirror2 = AttToPointMirror2,
+            AttToPointMirror = AttToPointMirror,
             AttToReplay = AttToReplay,
             AttToTorus = AttToTorus,
             AttToTorusMirror = AttToTorusMirror,
@@ -554,8 +543,7 @@ public class TheOtherFactor : MonoBehaviour
             #endregion
             #endregion
             #region Mirrors
-            MirrorPoint = MirrorPoint1.position,
-            MirrorPoint2 = MirrorPoint2.position,
+            MirrorPoint = MirrorPoint.position,
             MirrorPlaneNormal = mirrorPlaneNormalRotated,
             #endregion
             #region Torus
@@ -967,8 +955,7 @@ public class TheOtherFactor : MonoBehaviour
         attractJob.MinAtt = MinAtt;
         attractJob.AttToOgHands = AttToOgHands;
         attractJob.AttToPlaneMirror = AttToPlaneMirror;
-        attractJob.AttToPointMirror1 = AttToPointMirror1;
-        attractJob.AttToPointMirror2 = AttToPointMirror2;
+        attractJob.AttToPointMirror = AttToPointMirror;
         attractJob.AttToReplay = AttToReplay;
         attractJob.AttToTorus = AttToTorus;
         attractJob.AttToTorusMirror = AttToTorusMirror;
@@ -1004,8 +991,7 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #endregion
         #region Mirrors
-        attractJob.MirrorPoint = MirrorPoint1.position;
-        attractJob.MirrorPoint2 = MirrorPoint2.position;
+        attractJob.MirrorPoint = MirrorPoint.position;
         #endregion
         #region Torus
         if (parSysSTP != null)
@@ -1056,34 +1042,7 @@ public class TheOtherFactor : MonoBehaviour
         attractJob.UseDebugColors = UseDebugColors == true ? 1 : 0;
         attractJob.BaseColor = BaseColor;
         attractJob.ColorLerp = ColorLerp;
-        #region Heartbeat
-        // Time factor adjusted for speed
-        float timeFactor = Time.time * HeartbeatSpeed;
-
-        // Calculate the phase of the cycle [0, 1]
-        float cyclePhase = timeFactor - Mathf.Floor(timeFactor);
-
-        // Define phases for "lub", "dub", and pause
-        float lubPhase = 0.2f; // Duration of the first beat
-        float gapPhase = 0.05f; // Short gap between "lub" and "dub"
-        float dubPhase = 0.2f; // Duration of the second beat
-
-        // Calculate alpha based on the phase
-        float alpha;
-        if (cyclePhase <= lubPhase) // "Lub" beat
-        {
-            alpha = Mathf.Sin(cyclePhase / lubPhase * Mathf.PI) * AlphaRange.y;
-        }
-        else if (cyclePhase <= lubPhase + gapPhase + dubPhase) // "Dub" beat
-        {
-            alpha = Mathf.Sin((cyclePhase - lubPhase - gapPhase) / dubPhase * Mathf.PI) * AlphaRange.y * 0.8f; // Slightly less intense than "lub"
-        }
-        else // Pause
-        {
-            alpha = AlphaRange.x;
-        }
-        #endregion
-        attractJob.Alpha = UseHeartbeat == true ? Mathf.Clamp(alpha, 0, 1) : AlphaRange.y;
+        attractJob.Alpha = Alpha;
         #endregion
     }
     private void UpdateParticleMaterialAndHandVisual()
@@ -1165,8 +1124,7 @@ public class TheOtherFactor : MonoBehaviour
         [ReadOnly] public float MinAtt;
         [ReadOnly] public float AttToOgHands;
         [ReadOnly] public float AttToPlaneMirror;
-        [ReadOnly] public float AttToPointMirror1;
-        [ReadOnly] public float AttToPointMirror2;
+        [ReadOnly] public float AttToPointMirror;
         [ReadOnly] public float AttToReplay;
         [ReadOnly] public float AttToTorus;
         [ReadOnly] public float AttToTorusMirror;
@@ -1319,7 +1277,7 @@ public class TheOtherFactor : MonoBehaviour
                                                 AttGroups[particleIndex].y, JointDistanceMovedR[meshPosIndexR], HandBias[particleIndex].x);
                 #endregion
                 #endregion
-                #region Mirror Point 1
+                #region Mirror Point
                 #region Compute Mirror Attraction to Left Hand
                 Vector3 meshPosLPm = 2 * MirrorPoint - meshPosL;
                 Vector3 directionToMeshLPm = meshPosLPm - particlePos;
@@ -1353,40 +1311,6 @@ public class TheOtherFactor : MonoBehaviour
                                                                 AttGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], HandBias[particleIndex].x);
                 #endregion
                 #endregion
-                #region Mirror Point 2
-                #region Compute Mirror Attraction to Left Hand
-                Vector3 meshPosLPm2 = 2 * MirrorPoint2 - meshPosL;
-                Vector3 directionToMeshLPm2 = meshPosLPm2 - particlePos;
-                float distanceToMeshLPm2 = math.length(directionToMeshLPm2);
-
-                Vector3 velocityLPm2 = CalculateAttractionVelocity(directionToMeshLPm2, distanceToMeshLPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, MinAtt,
-                                                                AttGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], HandBias[particleIndex].y);
-                #endregion
-                #region Compute Mirror Attraction to Right Hand
-                Vector3 meshPosRPm2 = 2 * MirrorPoint2 - meshPosR;
-                Vector3 directionToMeshRPm2 = meshPosRPm2 - particlePos;
-                float distanceToMeshRPm2 = math.length(directionToMeshRPm2);
-
-                Vector3 velocityRPm2 = CalculateAttractionVelocity(directionToMeshRPm2, distanceToMeshRPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, MinAtt,
-                                                                AttGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], HandBias[particleIndex].x);
-                #endregion
-                #region Compute Mirror Attraction to Left Mirror Hand
-                Vector3 meshPosLMPm2 = 2 * MirrorPoint2 - meshPosLM;
-                Vector3 directionToMeshLMPm2 = meshPosLMPm2 - particlePos;
-                float distanceToMeshLMPm2 = math.length(directionToMeshLMPm2);
-
-                Vector3 velocityLMPm2 = CalculateAttractionVelocity(directionToMeshLMPm2, distanceToMeshLMPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, MinAtt,
-                                                                AttGroups[particleIndex].x, JointDistanceMovedL[meshPosIndexL], HandBias[particleIndex].y);
-                #endregion
-                #region Compute Mirror Attraction to Right Hand
-                Vector3 meshPosRMPm2 = 2 * MirrorPoint2 - meshPosRM;
-                Vector3 directionToMeshRMPm2 = meshPosRMPm2 - particlePos;
-                float distanceToMeshRMPm2 = math.length(directionToMeshRMPm2);
-
-                Vector3 velocityRMPm2 = CalculateAttractionVelocity(directionToMeshRMPm2, distanceToMeshRMPm2, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, MinAtt,
-                                                                AttGroups[particleIndex].y, JointDistanceMovedL[meshPosIndexR], HandBias[particleIndex].x);
-                #endregion
-                #endregion
                 #endregion
 
                 #region Compute Attraction to Torus
@@ -1401,6 +1325,7 @@ public class TheOtherFactor : MonoBehaviour
 
                 #region Compute Mirror Attraction to Torus
                 Vector3 torusPosPm = 2 * MirrorPoint - torusPos;
+
                 Vector3 directionToTorusPm = torusPosPm - particlePos;
                 float distanceToTorusPm = math.length(directionToTorusPm);
 
@@ -1415,10 +1340,8 @@ public class TheOtherFactor : MonoBehaviour
                 velocities[particleIndex] = math.lerp(velocities[particleIndex], (AttToOgHands        * (velocityL + velocityR)) +
                                                                                  (AttToReplay         * (velocityL2 + velocityR2)) +
                                                                                  (AttToPlaneMirror    * (velocityLM + velocityRM)) +
-                                                                                 (AttToPointMirror1   * (velocityLPm + velocityRPm)) + 
-                                                                                 (AttToPointMirror1   * AttToPlaneMirror * (velocityLMPm + velocityRMPm)) +
-                                                                                 (AttToPointMirror2   * (velocityLPm2 + velocityRPm2)) + 
-                                                                                 (AttToPointMirror2   * AttToPlaneMirror * (velocityLMPm2 + velocityRMPm2)) +
+                                                                                 (AttToPointMirror   * (velocityLPm + velocityRPm)) + 
+                                                                                 (AttToPointMirror   * AttToPlaneMirror * (velocityLMPm + velocityRMPm)) +
                                                                                  (AttToTorus       * TorusValues[torusIndex] * velocityTorus) + 
                                                                                  (AttToTorusMirror * TorusValues[torusIndex] * velocityTorusPm), 
                                                                                   VelocityLerp);
@@ -1428,8 +1351,6 @@ public class TheOtherFactor : MonoBehaviour
                                                distanceToMeshLM, distanceToMeshRM, 
                                                distanceToMeshLPm, distanceToMeshRPm, 
                                                distanceToMeshLMPm, distanceToMeshRMPm, 
-                                               distanceToMeshLPm2, distanceToMeshRPm2, 
-                                               distanceToMeshLMPm2, distanceToMeshRMPm2,
                                                distanceToTorus, distanceToTorusPm,
                                                DistanceForMinSize, ParticleSizeRange, SizeLerp, sizes[particleIndex]);
                 #endregion
@@ -1453,7 +1374,7 @@ public class TheOtherFactor : MonoBehaviour
             float distanceFactor = math.lerp(minAtt, 1f, inverseNormalizedDistance);
             attraction *= distanceFactor;
 
-            attraction *= math.lerp(.01f, 1f, math.min(jointDistanceMoved * 1000, 1));
+            attraction *= math.lerp(.01f, 1f, math.min(jointDistanceMoved  * 1000, 1));
 
             attraction *= perGroupHandScalor;
 
@@ -1513,8 +1434,6 @@ public class TheOtherFactor : MonoBehaviour
                 // Create the final color
                 newColor = new Color(rNoise, gNoise, bNoise, 1);
             }
-            //int particleGroup = particleIndex < totalParticles / 2 ? 1 : 2;
-            //Color debugColor = particleGroup == 1 ? Color.green : Color.red;
 
             newColor = new Color(.1f,.1f,.1f);
             newColor.a = alpha;
@@ -1531,8 +1450,6 @@ public class TheOtherFactor : MonoBehaviour
             float distanceToMeshLM, float distanceToMeshRM,
             float distanceToMeshLPm, float distanceToMeshRPm,
             float distanceToMeshLMPm, float distanceToMeshRMPm,
-            float distanceToMeshLPm2, float distanceToMeshRPm2,
-            float distanceToMeshLMPm2, float distanceToMeshRMPm2,
             float distanceToTorus, float distanceToTorusPM,
             float distanceForMinSize, Vector2 particleSizeMinMax,
             float sizeLerp, float currentSize)
@@ -1543,10 +1460,7 @@ public class TheOtherFactor : MonoBehaviour
                     math.min(math.min(distanceToMeshL, distanceToMeshR), math.min(distanceToMeshLM, distanceToMeshRM)),
                     math.min(math.min(distanceToMeshLPm, distanceToMeshRPm), math.min(distanceToMeshLMPm, distanceToMeshRMPm))
                 ),
-                math.min(
-                    math.min( math.min(distanceToMeshLPm2, distanceToMeshRPm2), math.min(distanceToMeshLMPm2, distanceToMeshRMPm2)),
                     math.min(distanceToTorus, distanceToTorusPM)
-                )
             );
 
             // Normalize the distance (0 at distanceForMinSize or beyond, 1 at distance 0)

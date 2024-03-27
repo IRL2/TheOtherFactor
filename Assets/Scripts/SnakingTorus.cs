@@ -20,7 +20,6 @@ public class SnakingTorus : MonoBehaviour
     private float[] gradientValues; // Array to hold the gradient values
     public float updateSpeed;
     private float timeSinceLastUpdate = 0f;
-    private float phase = 0f; // Phase shift for the moving gradient
 
     void Start()
     {
@@ -46,7 +45,7 @@ public class SnakingTorus : MonoBehaviour
 
             // Map the position to angles on the torus
             float theta = t * 2 * Mathf.PI * wraps; // Angle around the major radius
-            float phi = theta * (RadiusRange.y / RadiusRange.x); // Angle around the minor radius, adjusted for the number of Wraps
+            float phi = theta * (RadiusRange.y / RadiusRange.x); // Angle around the minor radius, adjusted for the number of MajorWraps
 
             // Calculate radial distance from the center line of the torus tube
             float radialDistance = Mathf.Abs(RadiusRange.y + RadiusRange.x * Mathf.Cos(phi)) - RadiusRange.y;
@@ -79,7 +78,7 @@ public class SnakingTorus : MonoBehaviour
             // Calculate angular positions with an adjustment to ensure closure
             float theta = i * totalAngle / (numSpheres - 1); // Ensures the last sphere aligns with the first
             float minorWraps = RadiusRange.y / RadiusRange.x;
-            float phi = i * totalAngle * minorWraps / (numSpheres - 1); // Synchronized with major Wraps
+            float phi = i * totalAngle * minorWraps / (numSpheres - 1); // Synchronized with major MajorWraps
 
             // Calculate position on the torus
             float x = (RadiusRange.y + RadiusRange.x * Mathf.Cos(phi)) * Mathf.Cos(theta);
