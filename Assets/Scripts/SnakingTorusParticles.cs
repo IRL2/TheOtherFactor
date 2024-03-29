@@ -21,6 +21,8 @@ public class SnakingTorusParticles : MonoBehaviour
     public Vector2 GradientRange = new Vector2(0f, 1f); // (.01,.21);
     public Color BaseColor = Color.blue;
     public float ColorLerp = .05f;
+    public Vector3 RotationAxis = Vector3.up; // Default rotation axis (y-axis)
+    public float RotationSpeed = 0f; // Degrees per second
     private JobHandle handle;
     SnakingTorusJob stp_Job;
 
@@ -66,6 +68,7 @@ public class SnakingTorusParticles : MonoBehaviour
 
             handle.Complete(); // Ensure the previous job is complete before scheduling a new one
             handle = stp_Job.ScheduleBatch(particleSystem, 64); // Reuse the job with updated properties
+            transform.Rotate(RotationAxis, RotationSpeed * Time.deltaTime);
         }
     }
 

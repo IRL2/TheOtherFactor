@@ -22,6 +22,8 @@ public class FactorState
     public float AttToReplay;
     public float AttToTorus;
     public float AttToTorusMirror;
+    public Vector2 HandDistRange;
+    public Vector2 HandSpeedRange;
     #endregion
     #region Particle Group Bias
     public Vector2 HandBiasRange;
@@ -50,9 +52,6 @@ public class FactorState
     [Header("Torus")]
     public Vector2 TorusRadiusRange;
     public float TorusMajorWraps;
-    public float TorusGradientWidth;
-    public float TorusGradientSpeed;
-    public Vector2 TorusGradientRange;
     #endregion
     #region Particles
     public int ParticlesPerHand;
@@ -127,6 +126,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     [Tooltip("A float value that scales the attraction of all particles to the point mirrored (mirrorpoint1) torus torus.")]
     [Range(0, 1f)]
     public float AttToTorusMirror = 0f;
+    [Tooltip("The attraction gets scaled with the speed at which the hands are moving. The speed is calculated from the distance between hand positions in each update. These values determine at which distances we reach the min and max speed values.")]
+    public Vector2 HandDistRange = Vector2.zero;
+    [Tooltip("The attraction gets scaled with the speed at which the hands are moving. The speed is calculated from the distance between hand positions in each update. These values determine the min and max speed values reached at min and max distance moved between updates.")]
+    public Vector2 HandSpeedRange = Vector2.zero;
     #endregion
     #region Particle Group Bias
     [Header("Particle Group Bias")]
@@ -186,11 +189,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     public Vector2 TorusRadiusRange = new Vector2(.0000001f, 1f);
     [Tooltip("Determines how often the string of particles is supposed to wrap around the major radius of torus.")]
     public float TorusMajorWraps = 1.0f;
-    [Tooltip("How many neighbouring particles together cycle from the TorusGradientRange.x value to the TorusGradientRange.y value and back. This gradient can be used to change attraction.")]
-    public float TorusGradientWidth = 1.0f;
-    [Tooltip("The speed at which the gradient values shift, simulating a situation that looks as if the gradients where wondering over the torus which can be used to guide attraction.")]
-    public float TorusGradientSpeed = 1.0f;
-    public Vector2 TorusGradientRange = new Vector2(.01f, .21f);
     [Tooltip("The min and max values for the torus particles color value, which can be used to influence attraction of TheOtheFactor particles.")]
     private SnakingTorusParticles STP;
     #endregion
@@ -240,6 +238,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.AttToReplay = AttToReplay;
         tof.AttToTorus = AttToTorus;
         tof.AttToTorusMirror = AttToTorusMirror;
+        tof.HandDistRange = HandDistRange;
+        tof.HandSpeedRange = HandSpeedRange;
         #endregion
         #region Particle Group Bias
         tof.HandBiasRange = HandBiasRange;
@@ -280,9 +280,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     {
         STP.RadiusRange = TorusRadiusRange;
         STP.MajorWraps = TorusMajorWraps;
-        STP.GradientWidth = TorusGradientWidth;
-        STP.GradientSpeed = TorusGradientSpeed;
-        STP.GradientRange = TorusGradientRange; 
     }
     public void SavePreset(string name)
     {
@@ -304,6 +301,8 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             AttToReplay = AttToReplay,
             AttToTorus = AttToTorus,
             AttToTorusMirror = AttToTorusMirror,
+            HandDistRange = HandDistRange,
+            HandSpeedRange = HandSpeedRange,
             #endregion
             #region Particle Group Bias
             HandBiasRange = HandBiasRange,
@@ -328,9 +327,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             #region Torus
             TorusRadiusRange = TorusRadiusRange,
             TorusMajorWraps = TorusMajorWraps,
-            TorusGradientWidth = TorusGradientWidth,
-            TorusGradientSpeed = TorusGradientSpeed,
-            TorusGradientRange = TorusGradientRange,
             #endregion
             #region Particles
             ParticlesPerHand = ParticlesPerHand,
@@ -394,6 +390,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         tof.AttToTorusMirror = state.AttToTorusMirror;
         AttToTorusMirror = state.AttToTorusMirror;
+
+        tof.HandDistRange = state.HandDistRange;
+        HandDistRange = state.HandDistRange;
+
+        tof.HandSpeedRange = state.HandSpeedRange;
+        HandSpeedRange = state.HandSpeedRange;
         #endregion
         #region Particle Group Bias
         tof.HandBiasRange = state.HandBiasRange;
@@ -451,15 +453,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
 
         STP.MajorWraps = state.TorusMajorWraps;
         TorusMajorWraps = state.TorusMajorWraps;
-
-        STP.GradientWidth = state.TorusGradientWidth;
-        TorusGradientWidth = state.TorusGradientWidth;
-
-        STP.GradientSpeed = state.TorusGradientSpeed;
-        TorusGradientSpeed = state.TorusGradientSpeed;
-
-        STP.GradientRange = state.TorusGradientRange;
-        TorusGradientRange = state.TorusGradientRange;
         #endregion
         #region Particles
         tof.ParticlesPerHand = state.ParticlesPerHand;

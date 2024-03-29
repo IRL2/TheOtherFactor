@@ -178,10 +178,11 @@ public class PseudoMeshCreator : MonoBehaviour
         }
 
         // Define the order of joints for each finger
-        string[] thumbOrder = { "0", "1", "2", "3" };// { "0", "1", "3", "2" };
-        string[] fingerOrder = { "1", "2", "3" };//{ "1", "3", "2" };
+        string[] thumbOrder = { "0", "1", "2", "3" };
+        string[] fingerOrder = { "1", "2", "3" };
+        string[] pinkyOrder = { "1", "2", "3", "0" }; 
 
-        string handTypeShort = handType == "right" ? "Rminor" : "l";
+        string handTypeShort = handType == "right" ? "R" : "L";
 
         // Process thumb joints
         foreach (var index in thumbOrder)
@@ -190,8 +191,8 @@ public class PseudoMeshCreator : MonoBehaviour
             if (joint != null) handJoints.Add(joint);
         }
 
-        // Process other fingers
-        string[] fingers = { "index", "middle", "ring", "pinky" };
+        // Process index, middle, and ring fingers
+        string[] fingers = { "index", "middle", "ring" };
         foreach (var finger in fingers)
         {
             foreach (var index in fingerOrder)
@@ -199,12 +200,13 @@ public class PseudoMeshCreator : MonoBehaviour
                 var joint = FindJoint($"b_{handTypeShort}_{finger}{index}");
                 if (joint != null) handJoints.Add(joint);
             }
-            // Special case for pinky0
-            if (finger == "pinky")
-            {
-                var pinky0 = FindJoint($"b_{handTypeShort}_pinky0");
-                if (pinky0 != null) handJoints.Add(pinky0);
-            }
+        }
+
+        // Process pinky joints
+        foreach (var index in pinkyOrder)
+        {
+            var joint = FindJoint($"b_{handTypeShort}_pinky{index}");
+            if (joint != null) handJoints.Add(joint);
         }
     }
     #endregion
@@ -602,35 +604,36 @@ public class PseudoMeshCreator : MonoBehaviour
         }
 
         // Define the custom order and selection strategy
+        
         var orderAndSelection = new (int index, string part)[]
         {
-            (0, "second"), (0, "first"), (1, "first"), (2, "first"), (3, "all"), (2, "second"), (1, "second"),
-            (4, "first"), (5, "first"), (6, "all"), (5, "second"), (4, "second"),
-            (7, "first"), (8, "first"), (9, "all"), (8, "second"), (7, "second"),
-            (10, "first"), (11, "first"), (12, "all"), (11, "second"), (10, "second"),
-            (13, "first"), (14, "first"), (15, "first"), (16, "all"), (15, "second"), (14, "second"), (13, "second")
+            (0, "first"), (0, "second"),    (1, "first"),  (2, "first"), (3, "first"), (3, "second"), (2, "second"), (1, "second"),
+            (4, "first"),  (5, "first"),  (6, "first"), (6, "second"),  (5, "second"),  (4, "second"),
+            (7, "first"),  (8, "first"),  (9, "first"), (9, "second"),   (8, "second"),  (7, "second"),
+            (10, "first"), (11, "first"), (12, "first"), (12, "second"),  (11, "second"), (10, "second"),
+            (13, "first"), (14, "first"), (15, "first"), (15, "second"),  (14, "second"), (13, "second"), (16, "first"), (16, "second"),
         };
-
-        #endregion
-
-        // previous version
+        
         /*
-        foreach (var kvp in indexPositions)
+        var orderAndSelection = new (int index, string part)[]
         {
-            int index = kvp.Key;
-            List<int> positions = kvp.Value;
-            int countForThisIndex = (int)Math.Round(percentages[index] * targetLength / 100.0);
-            // Calculate the interval for selecting positions to ensure they are spread out
-            double interval = positions.Count / (double)countForThisIndex;
-
-            for (int i = 0; i < countForThisIndex && i * interval < positions.Count; i++)
-            {
-                int posIndex = (int)Math.Round(i * interval);
-                resizedIndices.Add(index);
-                resizedRelativePositions.Add(originalRelativePositions[positions[posIndex]]);
-            }
-        }
+            (0, "all"), (1, "all"), (2, "all"), (3, "all"), (4, "all"), (5, "all"), (6, "all"),
+            (7, "all"), (8, "all"), (9, "all"), (10, "all"), (11, "all"), (12, "all"),
+            (13, "all"), (14, "all"), (15, "all"), (16, "all")
+        };
         */
+        /*
+        var orderAndSelection = new (int index, string part)[]
+        {
+        (0, "first"), (1, "first"), (2, "first"), (3, "first"), (4, "first"), (5, "first"), (6, "first"),
+        (7, "first"), (8, "first"), (9, "first"), (10, "first"), (11, "first"), (12, "first"),
+        (13, "first"), (14, "first"), (15, "first"), (16, "first"),
+        (0, "second"), (1, "second"), (2, "second"), (3, "second"), (4, "second"), (5, "second"), (6, "second"),
+        (7, "second"), (8, "second"), (9, "second"), (10, "second"), (11, "second"), (12, "second"),
+        (13, "second"), (14, "second"), (15, "second"), (16, "second")
+        };
+        */
+        #endregion
 
         foreach (var item in orderAndSelection)
         {
@@ -662,6 +665,9 @@ public class PseudoMeshCreator : MonoBehaviour
                     break;
             }
 
+            // Randomize the order of the list
+            //RandomizeList(selectedPositions);
+
             foreach (var posIndex in selectedPositions)
             {
                 resizedIndices.Add(item.index);
@@ -678,6 +684,16 @@ public class PseudoMeshCreator : MonoBehaviour
         }
 
         return (resizedIndices, resizedRelativePositions);
+    }
+    void RandomizeList<T>(List<T> list)
+    {
+        for (int i = 0; i < list.Count; i++)
+        {
+            T temp = list[i];
+            int randomIndex = UnityEngine.Random.Range(0, list.Count);
+            list[i] = list[randomIndex];
+            list[randomIndex] = temp;
+        }
     }
     #endregion
 }
