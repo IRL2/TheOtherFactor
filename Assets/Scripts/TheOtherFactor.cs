@@ -123,7 +123,7 @@ public class TheOtherFactor : MonoBehaviour
     public float LastStretchFactorExponent = 1f;
     private float[] StretchFactorIncrease;
     private Vector3 stretchPlaneNormal;
-    private Vector3 mirrorPlanePosition;
+    private Vector3 stretchPlanePosition;
     private Vector3 mirrorPlaneNormalRotated;
     private Transform MirrorPoint;
     private SnakingTorusParticles STP = new SnakingTorusParticles();
@@ -140,11 +140,11 @@ public class TheOtherFactor : MonoBehaviour
     private JobHandle updateMeshJobHandleR;
     private UpdateMeshJob updateMeshJobR;
 
-    private JobHandle updateMeshJobHandleLM;
-    private UpdateMeshJob updateMeshJobLM;
+    private JobHandle updateMeshJobHandleL2;
+    private UpdateMeshJob updateMeshJobL2;
 
-    private JobHandle updateMeshJobHandleRM;
-    private UpdateMeshJob updateMeshJobRM;
+    private JobHandle updateMeshJobHandleR2;
+    private UpdateMeshJob updateMeshJobR2;
     #endregion
     #region Hands
     #region References
@@ -329,9 +329,9 @@ public class TheOtherFactor : MonoBehaviour
         Quaternion rotation = Quaternion.Euler(0, 90, 0); // Create a 90-degree rotation around the Y axis
         Vector3 rotatedForward = rotation * forwardHorizontal; // Apply the rotation to the forwardHorizontal vector
 
-        mirrorPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * MirrorDistance;
+        stretchPlanePosition = mainCamera.transform.position + mainCamera.transform.forward * MirrorDistance;
         mirrorPlaneNormalRotated = rotatedForward;
-        Vector3  MirrorPointPosition = mirrorPlanePosition;
+        Vector3  MirrorPointPosition = stretchPlanePosition;
         MirrorPointPosition.y = 1.5f;
         MirrorPoint.position = MirrorPointPosition;
 
@@ -684,7 +684,7 @@ public class TheOtherFactor : MonoBehaviour
             StretchFactorLM[i] = 0;
         }
         #endregion
-        updateMeshJobLM = new UpdateMeshJob
+        updateMeshJobL2 = new UpdateMeshJob
         {
             #region Joints
             JointPositions = JointPositionsLM,
@@ -722,7 +722,7 @@ public class TheOtherFactor : MonoBehaviour
             StretchFactorRM[i] = 0;
         }
         #endregion
-        updateMeshJobRM = new UpdateMeshJob
+        updateMeshJobR2 = new UpdateMeshJob
         {
             #region Joints
             JointPositions = JointPositionsRM,
@@ -787,14 +787,14 @@ public class TheOtherFactor : MonoBehaviour
     #region Runtime Updates
     void OnParticleUpdateJobScheduled()
     {
-        if (RunJobs && attractJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted && updateMeshJobHandleLM.IsCompleted && updateMeshJobHandleRM.IsCompleted)
+        if (RunJobs && attractJobHandle.IsCompleted && updateMeshJobHandleL.IsCompleted && updateMeshJobHandleR.IsCompleted && updateMeshJobHandleL2.IsCompleted && updateMeshJobHandleR2.IsCompleted)
         {
             #region Complete Jobs
             attractJobHandle.Complete();
             updateMeshJobHandleL.Complete();
             updateMeshJobHandleR.Complete();
-            updateMeshJobHandleLM.Complete();
-            updateMeshJobHandleRM.Complete();
+            updateMeshJobHandleL2.Complete();
+            updateMeshJobHandleR2.Complete();
             #endregion
             if (isEvenFrame)
             {
@@ -838,7 +838,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Stretch
                 for (int i = 0; i < updateMeshJobL.StretchFactor.Length; i++)
                 {
-                    Vector3 toTransform = updateMeshJobL.DynamicMeshPositions[i] - mirrorPlanePosition;
+                    Vector3 toTransform = updateMeshJobL.DynamicMeshPositions[i] - stretchPlanePosition;
                     float distanceToPlane = math.length(toTransform);
                     updateMeshJobL.StretchFactor[i] = updateMeshJobL.StretchFactor[i] < distanceToPlane ? updateMeshJobL.StretchFactor[i] + StretchFactorIncrease[i] : distanceToPlane;
                 }
@@ -859,7 +859,7 @@ public class TheOtherFactor : MonoBehaviour
                 #region Update Stretch
                 for (int i = 0; i < updateMeshJobR.StretchFactor.Length; i++)
                 {
-                    Vector3 toTransform = updateMeshJobR.DynamicMeshPositions[i] - mirrorPlanePosition;
+                    Vector3 toTransform = updateMeshJobR.DynamicMeshPositions[i] - stretchPlanePosition;
                     float distanceToPlane = math.length(toTransform);
                     updateMeshJobR.StretchFactor[i] = updateMeshJobR.StretchFactor[i] < distanceToPlane ? updateMeshJobR.StretchFactor[i] + StretchFactorIncrease[i] : distanceToPlane;
                 }
@@ -867,56 +867,48 @@ public class TheOtherFactor : MonoBehaviour
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
                 if (updateMeshJobR.JointPositions.Length > 0) updateMeshJobHandleR = updateMeshJobR.Schedule(updateMeshJobR.BaseMeshPositions.Length, 1024);
                 #endregion
-                #region Update Mesh Job LM
+                #region Update Mesh Job L2
                 #region Update Joint Positions
-                for (int i = 0; i < updateMeshJobLM.JointPositions.Length; i++)
+                for (int i = 0; i < updateMeshJobL2.JointPositions.Length; i++)
                 {
-                    Vector3 toTransform = LJoints[i].position - mirrorPlanePosition;
-                    float distanceToPlane = Vector3.Dot(toTransform, stretchPlaneNormal);
-                    Vector3 mirroredPosition = L2Joints[i].position - 2 * distanceToPlane * stretchPlaneNormal;
-
-                    updateMeshJobLM.JointPositions[i] = mirroredPosition;
-                    updateMeshJobLM.JointRotations[i] = L2Joints[i].rotation;
+                    updateMeshJobL2.JointPositions[i] = L2Joints[i].position;
+                    updateMeshJobL2.JointRotations[i] = L2Joints[i].rotation;
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
-                updateMeshJobLM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
+                updateMeshJobL2.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
                 #region Update Stretch
-                for (int i = 0; i < updateMeshJobLM.StretchFactor.Length; i++)
+                for (int i = 0; i < updateMeshJobL2.StretchFactor.Length; i++)
                 {
-                        Vector3 toTransform = updateMeshJobLM.DynamicMeshPositions[i] - mirrorPlanePosition;
+                        Vector3 toTransform = updateMeshJobL2.DynamicMeshPositions[i] - stretchPlanePosition;
                         float distanceToPlane = math.length(toTransform);
-                        updateMeshJobLM.StretchFactor[i] = updateMeshJobLM.StretchFactor[i] > -distanceToPlane ? updateMeshJobLM.StretchFactor[i] - StretchFactorIncrease[i] : -distanceToPlane;
+                        updateMeshJobL2.StretchFactor[i] = updateMeshJobL2.StretchFactor[i] > -distanceToPlane ? updateMeshJobL2.StretchFactor[i] - StretchFactorIncrease[i] : -distanceToPlane;
                 }
                 #endregion
-                if (updateMeshJobLM.JointPositions.Length > 0) updateMeshJobHandleLM = updateMeshJobLM.Schedule(updateMeshJobLM.BaseMeshPositions.Length, 1024);
+                if (updateMeshJobL2.JointPositions.Length > 0) updateMeshJobHandleL2 = updateMeshJobL2.Schedule(updateMeshJobL2.BaseMeshPositions.Length, 1024);
                 #endregion
-                #region Update Mesh Job RM
+                #region Update Mesh Job R2
                 #region Update Joint Positions
-                for (int i = 0; i < updateMeshJobRM.JointPositions.Length; i++)
+                for (int i = 0; i < updateMeshJobR2.JointPositions.Length; i++)
                 {
-                    Vector3 toTransform = RJoints[i].position - mirrorPlanePosition;
-                    float distanceToPlane = Vector3.Dot(toTransform, stretchPlaneNormal);
-                    Vector3 mirroredPosition = R2Joints[i].position - 2 * distanceToPlane * stretchPlaneNormal;
-
-                    updateMeshJobRM.JointPositions[i] = mirroredPosition;
-                    updateMeshJobRM.JointRotations[i] = R2Joints[i].rotation;
+                    updateMeshJobR2.JointPositions[i] = R2Joints[i].position;
+                    updateMeshJobR2.JointRotations[i] = R2Joints[i].rotation;
                 }
                 #endregion
                 #region Update PositionOffsetsIndex
-                updateMeshJobRM.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
+                updateMeshJobR2.MeshPositionOffsetsIndex = MeshPositionOffsetsIndex;
                 #endregion
                 #region Update Stretch
-                for (int i = 0; i < updateMeshJobRM.StretchFactor.Length; i++)
+                for (int i = 0; i < updateMeshJobR2.StretchFactor.Length; i++)
                 {
-                    Vector3 toTransform = updateMeshJobRM.DynamicMeshPositions[i] - mirrorPlanePosition;
+                    Vector3 toTransform = updateMeshJobR2.DynamicMeshPositions[i] - stretchPlanePosition;
                     float distanceToPlane = math.length(toTransform);
-                    updateMeshJobRM.StretchFactor[i] = updateMeshJobRM.StretchFactor[i] > -distanceToPlane ? updateMeshJobRM.StretchFactor[i] - StretchFactorIncrease[i] : -distanceToPlane;
+                    updateMeshJobR2.StretchFactor[i] = updateMeshJobR2.StretchFactor[i] > -distanceToPlane ? updateMeshJobR2.StretchFactor[i] - StretchFactorIncrease[i] : -distanceToPlane;
                 }
                 #endregion
                 // This should not be necessary but somehow the first timing is weird so without it the job tries to execute before the arrays are assigned and that produces a null reference.
-                if (updateMeshJobRM.JointPositions.Length > 0) updateMeshJobHandleRM = updateMeshJobRM.Schedule(updateMeshJobRM.BaseMeshPositions.Length, 1024);
+                if (updateMeshJobR2.JointPositions.Length > 0) updateMeshJobHandleR2 = updateMeshJobR2.Schedule(updateMeshJobR2.BaseMeshPositions.Length, 1024);
                 #endregion            
                 #endregion
             }
@@ -986,8 +978,8 @@ public class TheOtherFactor : MonoBehaviour
         #region Mesh Positions
         attractJob.MeshPositionsL = updateMeshJobL.DynamicMeshPositions;
         attractJob.MeshPositionsR = updateMeshJobR.DynamicMeshPositions;
-        attractJob.MeshPositionsL2 = updateMeshJobLM.DynamicMeshPositions;
-        attractJob.MeshPositionsR2 = updateMeshJobRM.DynamicMeshPositions;
+        attractJob.MeshPositionsL2 = updateMeshJobL2.DynamicMeshPositions;
+        attractJob.MeshPositionsR2 = updateMeshJobR2.DynamicMeshPositions;
         #endregion
         #region Indices
         if (LastIndexStepSizeRange != IndexStepSizeRange)
@@ -1452,7 +1444,7 @@ public class TheOtherFactor : MonoBehaviour
                 newColor = new Color(rNoise, gNoise, bNoise, 1);
             }
 
-            //newColor = new Color(.1f,.1f,.1f);
+            newColor = new Color(.1f,.1f,.1f);
             newColor.a = alpha;
 
             Color finalColor = Color.Lerp(currentColor, newColor, colorLerp);
@@ -1568,8 +1560,8 @@ public class TheOtherFactor : MonoBehaviour
         attractJobHandle.Complete();
         updateMeshJobHandleL.Complete();
         updateMeshJobHandleR.Complete();
-        updateMeshJobHandleLM.Complete(); // Assuming there's a handle for this
-        updateMeshJobHandleRM.Complete(); // Assuming there's a handle for this
+        updateMeshJobHandleL2.Complete(); // Assuming there's a handle for this
+        updateMeshJobHandleR2.Complete(); // Assuming there's a handle for this
         #endregion
         #region Dispose Job Arrays
         #region Attract Job
@@ -1619,14 +1611,14 @@ public class TheOtherFactor : MonoBehaviour
         if (updateMeshJobR.StretchFactor.IsCreated) updateMeshJobR.StretchFactor.Dispose();
         #endregion
         #region LM
-        if (updateMeshJobLM.JointPositions.IsCreated) updateMeshJobLM.JointPositions.Dispose();
-        if (updateMeshJobLM.JointRotations.IsCreated) updateMeshJobLM.JointRotations.Dispose();
-        if (updateMeshJobLM.StretchFactor.IsCreated) updateMeshJobLM.StretchFactor.Dispose();
+        if (updateMeshJobL2.JointPositions.IsCreated) updateMeshJobL2.JointPositions.Dispose();
+        if (updateMeshJobL2.JointRotations.IsCreated) updateMeshJobL2.JointRotations.Dispose();
+        if (updateMeshJobL2.StretchFactor.IsCreated) updateMeshJobL2.StretchFactor.Dispose();
         #endregion
         #region RM
-        if (updateMeshJobRM.JointPositions.IsCreated) updateMeshJobRM.JointPositions.Dispose();
-        if (updateMeshJobRM.JointRotations.IsCreated) updateMeshJobRM.JointRotations.Dispose();
-        if (updateMeshJobRM.StretchFactor.IsCreated) updateMeshJobRM.StretchFactor.Dispose();
+        if (updateMeshJobR2.JointPositions.IsCreated) updateMeshJobR2.JointPositions.Dispose();
+        if (updateMeshJobR2.JointRotations.IsCreated) updateMeshJobR2.JointRotations.Dispose();
+        if (updateMeshJobR2.StretchFactor.IsCreated) updateMeshJobR2.StretchFactor.Dispose();
         #endregion
         #endregion
         #endregion
