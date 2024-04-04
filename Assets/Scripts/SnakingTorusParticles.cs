@@ -35,7 +35,6 @@ public class SnakingTorusParticles : MonoBehaviour
         stp_Job = new SnakingTorusJob
         {
             RadiusRange = RadiusRange,
-            Position = transform.position,
             MajorWraps = MajorWraps,
             SizeRange = SizeRange,
             Alpha = alpha,
@@ -54,7 +53,6 @@ public class SnakingTorusParticles : MonoBehaviour
         if (RunSystem)
         {
             stp_Job.RadiusRange = RadiusRange;
-            stp_Job.Position = transform.position;
             stp_Job.MajorWraps = MajorWraps;
             stp_Job.SizeRange = SizeRange;
             stp_Job.Alpha = alpha;
@@ -76,7 +74,6 @@ public class SnakingTorusParticles : MonoBehaviour
     struct SnakingTorusJob : IJobParticleSystemParallelForBatch
     {
         [ReadOnly] public Vector2 RadiusRange;
-        [ReadOnly] public Vector3 Position;
         [ReadOnly] public float MajorWraps;
         [ReadOnly] public int NumParticles;
         [ReadOnly] public Vector2 SizeRange;
@@ -116,6 +113,7 @@ public class SnakingTorusParticles : MonoBehaviour
 
                 // Set the color and other properties as needed
                 Color gradientColor = new Color(gradientValue, gradientValue, gradientValue, gradientValue * Alpha);
+                //gradientColor.r = GradientRange.x;
                 colors[i] = Color.Lerp(colors[i], gradientColor, ColorLerp);
 
                 // Compute particle size based on the gradient value

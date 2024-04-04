@@ -50,6 +50,8 @@ public class FactorState
     #endregion
     #region Torus
     [Header("Torus")]
+    public Vector3 Orientation;
+    public float RotationSpeed;
     public Vector2 TorusRadiusRange;
     public float TorusMajorWraps;
     #endregion
@@ -185,12 +187,14 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #endregion
     #region Torus
     [Header("Torus")]
+    [Tooltip("The rotation of the torus in world space.")]
+    public Vector3 Orientation = new Vector3(90, 0, 0);
+    [Tooltip("The speed of rotation in degree per second.")]
+    public float RotationSpeed = 45f;
     [Tooltip("The minor and major radius of the torus. The major radius is the distance from the center of the torus to the center of the tube, while the minor radius is the radius of the tube itself.")]
-    public Vector2 TorusRadiusRange = new Vector2(.0000001f, 1f);
+    public Vector2 RadiusRange = new Vector2(.0000001f, 1f);
     [Tooltip("Determines how often the string of particles is supposed to wrap around the major radius of torus.")]
-    public float TorusMajorWraps = 1.0f;
-    [Tooltip("The min and max values for the torus particles color value, which can be used to influence attraction of TheOtheFactor particles.")]
-    private SnakingTorusParticles STP;
+    public float MajorWraps = 1.0f;
     #endregion
     #region Particles
     [Header("Particles")]
@@ -261,6 +265,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.StretchFactorExponent = StretchFactorExponent;
         tof.StretchMax = StretchMax;
         #endregion
+        #region Torus
+        tof.Orientation = Orientation;
+        tof.RotationSpeed = RotationSpeed;
+        tof.RadiusRange = RadiusRange;
+        tof.MajorWraps = MajorWraps;
+        #endregion
         #region Particles
         tof.ParticlesPerHand = ParticlesPerHand;
         tof.ParticleSizeRange = ParticleSizeRange;
@@ -275,11 +285,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         tof.ColorLerp = ColorLerp;
         tof.Alpha = Alpha;
         #endregion
-    }
-    private void UpdateTorus()
-    {
-        STP.RadiusRange = TorusRadiusRange;
-        STP.MajorWraps = TorusMajorWraps;
     }
     public void SavePreset(string name)
     {
@@ -325,8 +330,10 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
             StretchMax = StretchMax,
             #endregion
             #region Torus
-            TorusRadiusRange = TorusRadiusRange,
-            TorusMajorWraps = TorusMajorWraps,
+            Orientation = Orientation,
+            RotationSpeed = RotationSpeed,
+            TorusRadiusRange = RadiusRange,
+            TorusMajorWraps = MajorWraps,
             #endregion
             #region Particles
             ParticlesPerHand = ParticlesPerHand,
@@ -448,11 +455,17 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         StretchMax = state.StretchMax;
         #endregion
         #region Torus
-        STP.RadiusRange = state.TorusRadiusRange;
-        TorusRadiusRange = state.TorusRadiusRange;
+        tof.Orientation = state.Orientation;
+        Orientation = state.Orientation;
 
-        STP.MajorWraps = state.TorusMajorWraps;
-        TorusMajorWraps = state.TorusMajorWraps;
+        tof.RotationSpeed = state.RotationSpeed;
+        RotationSpeed = state.RotationSpeed;
+
+        tof.RadiusRange = state.TorusRadiusRange;
+        RadiusRange = state.TorusRadiusRange;
+
+        tof.MajorWraps = state.TorusMajorWraps;
+        MajorWraps = state.TorusMajorWraps;
         #endregion
         #region Particles
         tof.ParticlesPerHand = state.ParticlesPerHand;
@@ -497,7 +510,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     void Start()
     {
         tof = GetComponent<TheOtherFactor>();
-        STP = GameObject.Find("Torus").GetComponent<SnakingTorusParticles>();
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
         {
@@ -511,7 +523,6 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     private void Update()
     {
         UpdateTOF();
-        UpdateTorus();
 
         if (DisplayCanvas) presetDisplayText.text = FormatVariablesForDisplay();
         else presetDisplayText.text = "";

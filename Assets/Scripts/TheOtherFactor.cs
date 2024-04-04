@@ -68,6 +68,12 @@ public class TheOtherFactor : MonoBehaviour
     public float StretchMax = 1f;
     public float MirrorDistance = .5f; // Distance from the camera to the virtual mirror plane
     #endregion
+    #region Torus
+    public Vector3 Orientation = new Vector3(90, 0, 0);
+    public float RotationSpeed = 45f;
+    public Vector2 RadiusRange = Vector2.zero;
+    public float MajorWraps = 152;
+    #endregion
     #region Particles
     [Header("Particles")]
     [Tooltip("Restart of the runtime jobs (button in the inspector) required to apply a change here while in play mode.")]
@@ -126,9 +132,10 @@ public class TheOtherFactor : MonoBehaviour
     private Vector3 stretchPlanePosition;
     private Vector3 mirrorPlaneNormalRotated;
     private Transform MirrorPoint;
-    private SnakingTorusParticles STP = new SnakingTorusParticles();
-    private ParticleSystem parSysSTP;
-    ParticleSystem.Particle[] STPparticles;
+    #endregion
+    #region Torus
+    private Vector3 currentOrientation;
+    private Vector3 prevOrientation;
     #endregion
     #endregion
     #region Update Mesh Jobs
@@ -185,8 +192,6 @@ public class TheOtherFactor : MonoBehaviour
         #region Find References
         #region Particle System
         particleSys = GetComponent<ParticleSystem>();
-        parSysSTP = STP.particleSystem;
-        ParticleSystem.Particle[] STPparticles = new ParticleSystem.Particle[STP.numParticles];
 
         ParticleSystem.MainModule mainModule = particleSys.main;
         mainModule.maxParticles = 1000000;
@@ -196,10 +201,6 @@ public class TheOtherFactor : MonoBehaviour
         // Get the ParticleSystemRenderer component
         particleRenderer = particleSys.GetComponent<ParticleSystemRenderer>();
         particleRenderer.material = ParticleMaterial;
-        #endregion
-        #region Torus
-        STP = GameObject.Find("Torus").GetComponent<SnakingTorusParticles>();
-        parSysSTP = STP.gameObject.GetComponent<ParticleSystem>();
         #endregion
         #region Mirrors
         MirrorPoint = GameObject.Find("Mirror Point").transform;
@@ -334,11 +335,6 @@ public class TheOtherFactor : MonoBehaviour
         Vector3  MirrorPointPosition = stretchPlanePosition;
         MirrorPointPosition.y = 1.5f;
         MirrorPoint.position = MirrorPointPosition;
-
-        STP.gameObject.SetActive(true);
-        STP.RunSystem = true;
-        STP.transform.position = MirrorPointPosition;
-        parSysSTP.simulationSpace = ParticleSystemSimulationSpace.Local;
     }
     #endregion
     #region Emit Particles
@@ -505,10 +501,6 @@ public class TheOtherFactor : MonoBehaviour
         NativeArray<int> IndexStepSizes = new NativeArray<int>(totalParticles, Allocator.Persistent);
         #endregion
         #endregion
-        #region Torus
-        NativeArray<Vector3> a_TorusPositions = new NativeArray<Vector3>(STP.numParticles, Allocator.Persistent);
-        NativeArray<float> a_TorusValue = new NativeArray<float>(STP.numParticles, Allocator.Persistent);
-        #endregion
         #endregion
         attractJob = new AttractionJob
         {
@@ -553,9 +545,10 @@ public class TheOtherFactor : MonoBehaviour
             MirrorPlaneNormal = mirrorPlaneNormalRotated,
             #endregion
             #region Torus
-            TorusPositions = a_TorusPositions,
-            TorusValues = a_TorusValue,
             TorusIndex = 0,
+            Rotation = quaternion.Euler(math.radians(Orientation.x), math.radians(Orientation.y), math.radians(Orientation.z)),
+            RadiusRange = RadiusRange,
+            MajorWraps = MajorWraps,
             #endregion
             #endregion
             #region Size
@@ -997,33 +990,20 @@ public class TheOtherFactor : MonoBehaviour
         attractJob.MirrorPoint = MirrorPoint.position;
         #endregion
         #region Torus
-        if (parSysSTP != null)
+        attractJob.TorusIndex = (attractJob.TorusIndex + 1) % particleSys.particleCount;
+
+        if (prevOrientation != Orientation)
         {
-            if (STPparticles == null || STPparticles.Length < parSysSTP.main.maxParticles)
-            {
-                STPparticles = new ParticleSystem.Particle[parSysSTP.main.maxParticles];
-            }
-
-            int numParticlesAlive = parSysSTP.GetParticles(STPparticles);
-
-            for (int i = 0; i < numParticlesAlive; i++)
-            {
-                // Convert the local space position to world space
-                Vector3 particlePosition = parSysSTP.transform.TransformPoint(STPparticles[i].position);
-
-                // Accessing the 'r' component of particle color
-                float particleRedValue = STPparticles[i].GetCurrentColor(parSysSTP).r;// / 255.0f;
-
-                attractJob.TorusPositions[i] = particlePosition;
-                attractJob.TorusValues[i] = particleRedValue;
-            }
-            // TODO: Create Step Size options same as meshindices
-            attractJob.TorusIndex = (attractJob.TorusIndex + 1) % attractJob.TorusPositions.Length;
+            currentOrientation = Orientation;
         }
-        else
-        {
-            Debug.Log("Particle System is not assigned.");
-        }
+        prevOrientation = Orientation;
+        currentOrientation.y += RotationSpeed * Time.deltaTime;
+        currentOrientation.y %= 360f;
+        quaternion orientation = quaternion.Euler(math.radians(currentOrientation.x), math.radians(currentOrientation.y), math.radians(currentOrientation.z));
+        attractJob.Rotation = orientation;
+
+        attractJob.RadiusRange = RadiusRange;
+        attractJob.MajorWraps = MajorWraps;
         #endregion
         #endregion
         #region Size
@@ -1160,13 +1140,13 @@ public class TheOtherFactor : MonoBehaviour
         #endregion
         #region Mirrors
         [ReadOnly] public Vector3 MirrorPoint;
-        [ReadOnly] public Vector3 MirrorPoint2;
         [ReadOnly] public Vector3 MirrorPlaneNormal;
         #endregion
         #region Torus
-        [ReadOnly] public NativeArray<Vector3> TorusPositions;
-        [ReadOnly] public NativeArray<float> TorusValues;
         [ReadOnly] public int TorusIndex;
+        [ReadOnly] public quaternion Rotation;
+        [ReadOnly] public Vector2 RadiusRange;
+        [ReadOnly] public float MajorWraps;
         #endregion
         #endregion
         #region Size
@@ -1189,6 +1169,9 @@ public class TheOtherFactor : MonoBehaviour
             var colors = particles.startColors;
             var sizes = particles.sizes.x;
             int endIndex = startIndex + count;
+            int totalParticles = particles.count;
+            float totalAngle = 2 * math.PI * MajorWraps;
+            float minorWraps = RadiusRange.y / RadiusRange.x;
             #endregion
 
             for (int i = startIndex; i < endIndex; i++)
@@ -1313,16 +1296,25 @@ public class TheOtherFactor : MonoBehaviour
                 #endregion
                 #endregion
                 #endregion
-
                 #region Compute Attraction to Torus
-                int torusIndex = (particleIndex - TorusIndex + TorusPositions.Length) % TorusPositions.Length;
-                Vector3 torusPos = TorusPositions[torusIndex];
+                int torusIndex = (particleIndex + TorusIndex) % totalParticles;
+
+                float theta = torusIndex * totalAngle / totalParticles;
+                float phi = torusIndex * totalAngle * minorWraps / totalParticles;
+
+                float x = (RadiusRange.y + RadiusRange.x * math.cos(phi)) * math.cos(theta);
+                float y = (RadiusRange.y + RadiusRange.x * math.cos(phi)) * math.sin(theta);
+                float z = RadiusRange.x * math.sin(phi);
+
+                Vector3 torusPos = new Vector3(x, y, z);
+                torusPos = math.rotate(Rotation, torusPos);
+                torusPos += MirrorPoint;
                 
                 Vector3 directionToTorus = torusPos - particlePos;
                 float distanceToTorus = math.length(directionToTorus);
 
                 Vector3 velocityTorus = CalculateAttractionVelocity(directionToTorus, distanceToTorus, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, MinAtt,
-                                                                1, .3f, 1);
+                                                                1, 1.2f, 1);
 
                 #region Compute Mirror Attraction to Torus
                 Vector3 torusPosPm = 2 * MirrorPoint - torusPos;
@@ -1331,21 +1323,20 @@ public class TheOtherFactor : MonoBehaviour
                 float distanceToTorusPm = math.length(directionToTorusPm);
 
                 Vector3 velocityTorusPm = CalculateAttractionVelocity(directionToTorusPm, distanceToTorusPm, AttractionExponentDivisor, AttractionStrength, DistForMinAtt, MinAtt,
-                                                                1, .3f, 1);
+                                                                1, 1.2f, 1);
                 #endregion
-
                 #endregion
-
                 #region Update Particle Velocity, Size and Color
                 #region Veloctiy
                 velocities[particleIndex] = math.lerp(velocities[particleIndex], (AttToOgHands        * (velocityL + velocityR)) +
                                                                                  (AttToReplay         * (velocityL2 + velocityR2)) +
                                                                                  (AttToPlaneMirror    * (velocityLM + velocityRM)) +
-                                                                                 (AttToPointMirror   * (velocityLPm + velocityRPm)) + 
-                                                                                 (AttToPointMirror   * AttToPlaneMirror * (velocityLMPm + velocityRMPm)) +
-                                                                                 (AttToTorus       * TorusValues[torusIndex] * velocityTorus) + 
-                                                                                 (AttToTorusMirror * TorusValues[torusIndex] * velocityTorusPm), 
+                                                                                 (AttToPointMirror    * (velocityLPm + velocityRPm)) + 
+                                                                                 (AttToPointMirror    * AttToPlaneMirror * (velocityLMPm + velocityRMPm)) +
+                                                                                 (AttToTorus          * velocityTorus) + 
+                                                                                 (AttToTorusMirror    * velocityTorusPm), 
                                                                                   VelocityLerp);
+
                 #endregion
                 #region Size
                 sizes[i] = ComputeParticleSize(distanceToMeshL, distanceToMeshR, 
@@ -1354,9 +1345,10 @@ public class TheOtherFactor : MonoBehaviour
                                                distanceToMeshLMPm, distanceToMeshRMPm, 
                                                distanceToTorus, distanceToTorusPm,
                                                DistanceForMinSize, ParticleSizeRange, SizeLerp, sizes[particleIndex]);
+
                 #endregion
                 #region Color
-                //colors[particleIndex] = particleIndex < 100 ? Color.white : Color.white * .1f ;// ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex, particles.count, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
+                //colors[particleIndex] = Color.white * ((float)particleIndex / (float)particles.count);// particleIndex < 100 ? Color.white : Color.white * .1f ;// ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex, particles.count, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
                 colors[particleIndex] = ComputeParticleColor(velocities[particleIndex], BaseColor, particleIndex, particles.count, UseDebugColors, Alpha, ColorLerp, colors[particleIndex]);
                 #endregion
                 #endregion
@@ -1444,7 +1436,7 @@ public class TheOtherFactor : MonoBehaviour
                 newColor = new Color(rNoise, gNoise, bNoise, 1);
             }
 
-            newColor = new Color(.1f,.1f,.1f);
+            //newColor = new Color(.1f,.1f,.1f);
             newColor.a = alpha;
 
             Color finalColor = Color.Lerp(currentColor, newColor, colorLerp);
@@ -1584,10 +1576,6 @@ public class TheOtherFactor : MonoBehaviour
         if (attractJob.MeshIndicesL2.IsCreated) attractJob.MeshIndicesL2.Dispose();
         if (attractJob.MeshIndicesR2.IsCreated) attractJob.MeshIndicesR2.Dispose();
         #endregion
-        #endregion
-        #region Torus Arrays
-        attractJob.TorusPositions.Dispose();
-        attractJob.TorusValues.Dispose();
         #endregion
         #endregion
 
