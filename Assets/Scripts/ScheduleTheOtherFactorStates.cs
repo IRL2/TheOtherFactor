@@ -232,7 +232,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     {
         tof.DisplayOculusHands = DisplayOculusHands;
         #region Attraction
-        tof.AttractionStrength = AttractionStrength;
+        //tof.AttractionStrength = AttractionStrength;
         tof.VelocityLerp = VelocityLerp;
         tof.DistForMinAtt = DistForMinAtt;
         tof.MinAtt = MinAtt;
@@ -570,13 +570,13 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     }
     public void NextPreset()
     {
-        currentPresetIndex = (currentPresetIndex + 1) % presets.Count;
+        currentPresetIndex = (currentPresetIndex + 1) % 6;// presets.Count;
         ApplyPreset(presets[currentPresetIndex]);
         PlaySwitchSound();
     }
     public void PreviousPreset()
     {
-        if (currentPresetIndex == 0) currentPresetIndex = presets.Count;
+        if (currentPresetIndex == 0) currentPresetIndex = 6;// presets.Count;
         currentPresetIndex--;
         ApplyPreset(presets[currentPresetIndex]);
         PlaySwitchSound();

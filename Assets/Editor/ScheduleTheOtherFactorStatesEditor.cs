@@ -60,7 +60,6 @@ public class ScheduleTheOtherFactorStatesEditor : Editor
             }
         }
 
-        DrawDefaultInspector(); // Draws the default inspector
 
         // Saving new preset
         EditorGUILayout.Space();
@@ -71,5 +70,7 @@ public class ScheduleTheOtherFactorStatesEditor : Editor
             script.SavePreset(presetName);
             Debug.Log("Preset saved: " + presetName);
         }
+
+        DrawDefaultInspector(); // Draws the default inspector
     }
 }

@@ -125,7 +125,7 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Positions
     private Vector2 LastIndexStepSizeRange = Vector2.zero;
-    private Vector2 LastStretchFactorRange = new Vector2(0f, 1f);
+    private Vector2 LastStretchFactorRange = Vector2.zero;
     public float LastStretchFactorExponent = 1f;
     private float[] StretchFactorIncrease;
     private Vector3 stretchPlaneNormal;
@@ -175,7 +175,7 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Position Offsets
     private int MeshPositionOffsetsIndex = 0;
-    private Vector2 LastPositionOffsetMinMax = Vector2.zero;
+    private Vector2 LastPositionOffsetRange = Vector2.zero;
     #endregion
     #endregion
     #region Utility
@@ -278,7 +278,7 @@ public class TheOtherFactor : MonoBehaviour
         RunJobs = true;
         #endregion
         //StartCoroutine(IncreaseIndexStepSizeY(4f));
-        //StartCoroutine(IncreaseAttractionStrength(.1f));
+        StartCoroutine(IncreaseAttractionStrength(.01f));
     }
     #region Fetch Pseudo Mesh
     private void FetchPseudoMesh()
@@ -351,8 +351,8 @@ public class TheOtherFactor : MonoBehaviour
         };
 
         Camera mainCamera = Camera.main;
-        var leftMiddle1Joint = LJoints.FirstOrDefault(j => j.name == "b_l_middle1");
-        var rightMiddle1Joint = RJoints.FirstOrDefault(j => j.name == "b_r_middle1");
+        var leftMiddle1Joint = MirrorPoint;// LJoints.FirstOrDefault(j => j.name == "b_l_middle1");
+        var rightMiddle1Joint = MirrorPoint;// RJoints.FirstOrDefault(j => j.name == "b_r_middle1");
 
         if (leftMiddle1Joint != null && rightMiddle1Joint != null)
         {
@@ -372,7 +372,7 @@ public class TheOtherFactor : MonoBehaviour
                 particleSys.Emit(emitParams, 1);
             }
         }
-        SetMerkaba(MirrorPoint.position);
+        //SetMerkaba(MirrorPoint.position);
     }
     private void SetMerkaba(Vector3 centerPoint)
     {
@@ -737,6 +737,11 @@ public class TheOtherFactor : MonoBehaviour
         };
         #endregion
         #endregion
+        for (int i = 0; i < ParticlesPerHand; i++)
+        {
+            // array is shared by all mesh jobs but needs to accessed by one
+            updateMeshJobL.MeshPositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(PosOffsetRange.x, PosOffsetRange.y));
+        }
     }
     #endregion
     #region Slow Start Coroutines (deactivated)
@@ -792,7 +797,7 @@ public class TheOtherFactor : MonoBehaviour
             if (isEvenFrame)
             {
                 #region Update Mesh Jobs
-                if (LastPositionOffsetMinMax != PosOffsetRange)
+                if (LastPositionOffsetRange != PosOffsetRange)
                 {
                     for (int i = 0; i < updateMeshJobL.MeshPositionOffsets.Length; i++)
                     {
@@ -800,7 +805,7 @@ public class TheOtherFactor : MonoBehaviour
                         updateMeshJobL.MeshPositionOffsets[i] = Mathf.RoundToInt(UnityEngine.Random.Range(PosOffsetRange.x, PosOffsetRange.y));
                     }
                 }
-                LastPositionOffsetMinMax = PosOffsetRange;
+                LastPositionOffsetRange = PosOffsetRange;
                 MeshPositionOffsetsIndex = MeshPositionOffsetsIndex < updateMeshJobL.MeshPositionOffsets.Length ? MeshPositionOffsetsIndex + 1 : 0;
                 #region Stretch Factor Min Max
                 if (LastStretchFactorRange != StretchFactorRange || StretchFactorExponent != LastStretchFactorExponent)
