@@ -24,18 +24,13 @@ public class ScheduleTheOtherFactorStatesEditor : Editor
 
         // Applying a preset
         EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Apply Preset by Name or Index (Name will get Priority)", headerStyle);
+        EditorGUILayout.LabelField("Apply Preset by Name", headerStyle);
         applyPresetName = EditorGUILayout.TextField("Preset Name", applyPresetName);
-        applyPresetIndex = EditorGUILayout.IntField("Preset Index", applyPresetIndex);
         if (GUILayout.Button("Apply Preset"))
         {
             if (!string.IsNullOrEmpty(applyPresetName))
             {
                 script.ApplyPresetByNameOrIndex(name: applyPresetName);
-            }
-            else
-            {
-                script.ApplyPresetByNameOrIndex(index: applyPresetIndex);
             }
         }
         if (GUILayout.Button("Next Preset"))
@@ -69,6 +64,17 @@ public class ScheduleTheOtherFactorStatesEditor : Editor
         {
             script.SavePreset(presetName);
             Debug.Log("Preset saved: " + presetName);
+        }
+
+        if (GUILayout.Button("Update State Bank"))
+        {
+            script.UpdateStateBank();
+        }
+
+
+        if (Application.isPlaying && GUILayout.Button("Reset Particle Pos"))
+        {
+            script.ResetParticlePos();
         }
 
         DrawDefaultInspector(); // Draws the default inspector

@@ -10,6 +10,7 @@ using Unity.Mathematics;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.ParticleSystemJobs;
+using static UnityEngine.ParticleSystem;
 
 public class TheOtherFactor : MonoBehaviour
 {
@@ -247,11 +248,21 @@ public class TheOtherFactor : MonoBehaviour
     public async void StartTheOtherFactor()
     {
         gameObject.SetActive(true);
+        DisposeNativeArrays();
+        await Task.Yield();
+        // Setting these values to negInfinity will force the arrays to be refilled which adjusts for changes in size if the handsperparticle was updated during the restart
+        LastGroupBiasRange = Vector2.negativeInfinity;
+        LastGroupBiasRangeExp = float.NegativeInfinity;
+        LastIndexStepSizeRange = Vector2.negativeInfinity;
+        LastPositionOffsetRange = Vector2.negativeInfinity;
+        LastStretchFactorExponent = float.NegativeInfinity;
+        LastStretchFactorRange = Vector2.negativeInfinity;
         await InitializeCoroutine();
     }
     public void StopTheOtherFactor()
     {
         RunJobs = false;
+        DisposeNativeArrays();
         this.gameObject.SetActive(false);
     }
     #endregion
@@ -278,7 +289,7 @@ public class TheOtherFactor : MonoBehaviour
         RunJobs = true;
         #endregion
         //StartCoroutine(IncreaseIndexStepSizeY(4f));
-        StartCoroutine(IncreaseAttractionStrength(.01f));
+        //StartCoroutine(IncreaseAttractionStrength(.01f));
     }
     #region Fetch Pseudo Mesh
     private void FetchPseudoMesh()
@@ -343,7 +354,6 @@ public class TheOtherFactor : MonoBehaviour
     /// </summary>
     private void EmitParticles()
     {
-        int totalParticles = ParticlesPerHand * 2;
         ParticleSystem.EmitParams emitParams = new ParticleSystem.EmitParams
         {
             startSize = ParticleSizeRange.x,
@@ -359,20 +369,34 @@ public class TheOtherFactor : MonoBehaviour
             float emissionRadius = .5f; // Radius of the sphere around the hand joints
 
             // Emit particles around the left middle1 joint
-            for (int i = 0; i < totalParticles / 2; i++)
+            for (int i = 0; i < ParticlesPerHand; i++)
             {
                 emitParams.position = leftMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSys.Emit(emitParams, 1);
             }
 
             // Emit particles around the right middle1 joint
-            for (int i = 0; i < totalParticles / 2; i++)
+            for (int i = 0; i < ParticlesPerHand; i++)
             {
                 emitParams.position = rightMiddle1Joint.position + UnityEngine.Random.insideUnitSphere * emissionRadius;
                 particleSys.Emit(emitParams, 1);
             }
         }
         //SetMerkaba(MirrorPoint.position);
+    }
+    public void SetSphere()
+    {
+        ParticleSystem.Particle[] particles = new ParticleSystem.Particle[particleSys.particleCount];
+        particleSys.GetParticles(particles);
+        float emissionRadius = .5f; // Radius of the sphere around the hand joints
+
+        // Emit particles around the left middle1 joint
+        for (int i = 0; i < particleSys.particleCount; i++)
+        {
+            particles[i].position = MirrorPoint.position + UnityEngine.Random.onUnitSphere * emissionRadius;
+        }
+
+        particleSys.SetParticles(particles);
     }
     private void SetMerkaba(Vector3 centerPoint)
     {
@@ -1002,10 +1026,17 @@ public class TheOtherFactor : MonoBehaviour
             currentOrientation = Orientation;
         }
         prevOrientation = Orientation;
-        currentOrientation.y += RotationSpeed * Time.deltaTime;
-        currentOrientation.y %= 360f;
-        quaternion orientation = quaternion.Euler(math.radians(currentOrientation.x), math.radians(currentOrientation.y), math.radians(currentOrientation.z));
-        attractJob.Rotation = orientation;
+        // Assuming 'currentRotation' is a quaternion stored and updated each frame
+        // Update current orientation
+        currentOrientation.y += RotationSpeed;
+        currentOrientation.y %= 360f; // Normalize the angle
+
+        // Calculate the target orientation as a quaternion
+        quaternion targetOrientation = quaternion.Euler(math.radians(currentOrientation.x), math.radians(currentOrientation.y), math.radians(currentOrientation.z));
+
+        // Interpolate smoothly towards the target orientation
+        attractJob.Rotation = math.slerp(attractJob.Rotation, targetOrientation, .1f);
+
 
         attractJob.RadiusRange = RadiusRange;
         attractJob.MajorWraps = MajorWraps;
@@ -1551,6 +1582,10 @@ public class TheOtherFactor : MonoBehaviour
     #endregion
     #region Complete Jobs And Dispose Native Arrays On Disable
     void OnDisable()
+    {
+        DisposeNativeArrays();
+    }
+    public void DisposeNativeArrays()
     {
         #region Complete Jobs
         // Ensure all jobs are completed before disposing of the NativeArrays

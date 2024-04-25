@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
 
@@ -80,7 +81,12 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #region Schedule
     private TheOtherFactor tof;
     public List<FactorState> presets = new List<FactorState>();
-    private int currentPresetIndex = 0;
+    public List<FactorState> presetBench = new List<FactorState>();
+    [Range(0,10)]
+    public int currentPresetIndex = 0;
+    private int prevIndex = 0;
+    [SerializeField]
+    private string currentPresetName = string.Empty;
     #endregion
     #region Utility
     [Header("Utility")]
@@ -102,7 +108,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     [Range(0f, 1f)]
     public float AttractionStrength = 1f;
     [Tooltip("The linear interpolation factor for the velocity change in one update step.")]
-    [Range(0.05f, 1f)]
+    [Range(0.001f, 1f)]
     public float VelocityLerp = .1f;
     [Tooltip("The distance between a particle and its attraction source affects the attraction strength for this copmutation. If the distance is 0 the strength is 1, and for distance < DistForMinAtt it gets scaled between 1 and MinAtt, reaching MinAtt at distance == DistForMinAtt.")]
     [Range (0f, 1f)]
@@ -232,7 +238,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     {
         tof.DisplayOculusHands = DisplayOculusHands;
         #region Attraction
-        //tof.AttractionStrength = AttractionStrength;
+        tof.AttractionStrength = AttractionStrength;
         tof.VelocityLerp = VelocityLerp;
         tof.DistForMinAtt = DistForMinAtt;
         tof.MinAtt = MinAtt;
@@ -468,8 +474,18 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
         MajorWraps = state.TorusMajorWraps;
         #endregion
         #region Particles
-        tof.ParticlesPerHand = state.ParticlesPerHand;
-        ParticlesPerHand = state.ParticlesPerHand;
+        if (ParticlesPerHand != state.ParticlesPerHand)
+        {
+            ParticlesPerHand = state.ParticlesPerHand;
+            tof.ParticlesPerHand = ParticlesPerHand;
+
+            if (Application.isPlaying)
+            {
+                RestartTOF();
+            }
+        }
+
+        if (Application.isPlaying) tof.SetSphere();
 
         tof.ParticleSizeRange = state.ParticleSizeRange;
         ParticleSizeRange = state.ParticleSizeRange;
@@ -509,6 +525,7 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     #region Functions without the need to touch when variables change
     void Start()
     {
+        prevIndex = currentPresetIndex;
         tof = GetComponent<TheOtherFactor>();
         audioSource = GetComponent<AudioSource>();
         if (audioSource == null)
@@ -542,10 +559,41 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
                 PlaySwitchSound();
             }
         }
+
+        currentPresetIndex = Math.Min(currentPresetIndex, presets.Count -1);
+        if (prevIndex != currentPresetIndex)
+        {
+            ApplyPresetByNameOrIndex(index: currentPresetIndex);
+        }
+        prevIndex = currentPresetIndex;
+        currentPresetName = presets[currentPresetIndex].Name;
+    }
+    public void UpdateStateBank()
+    {
+        foreach (var preset in presets)
+        {
+            var existingState = presetBench.FirstOrDefault(s => s.Name == preset.Name);
+            if (existingState != null)
+            {
+                presetBench.Remove(existingState);
+            }
+            presetBench.Add(preset);
+        }
+    }
+    public void ResetParticlePos()
+    {
+        tof.SetSphere();
+    }
+    public async Task RestartTOF()
+    {
+        tof.StopTheOtherFactor();
+        await Task.Yield();
+        tof.StartTheOtherFactor();
     }
     public void ApplyPresetByNameOrIndex(string name = null, int index = -1)
     {
         FactorState selectedPreset = null;
+        currentPresetIndex = index;
 
         if (!string.IsNullOrEmpty(name))
         {
@@ -570,13 +618,13 @@ public class ScheduleTheOtherFactorStates : MonoBehaviour
     }
     public void NextPreset()
     {
-        currentPresetIndex = (currentPresetIndex + 1) % 6;// presets.Count;
+        currentPresetIndex = (currentPresetIndex + 1) % presets.Count;
         ApplyPreset(presets[currentPresetIndex]);
         PlaySwitchSound();
     }
     public void PreviousPreset()
     {
-        if (currentPresetIndex == 0) currentPresetIndex = 6;// presets.Count;
+        if (currentPresetIndex == 0) currentPresetIndex = presets.Count;
         currentPresetIndex--;
         ApplyPreset(presets[currentPresetIndex]);
         PlaySwitchSound();
